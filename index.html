@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1f6b52">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Gelişim">
+  <title>Gelişim Takip</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">
+        <svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="30" fill="#1f6b52"/><path d="M38 14a18 18 0 1 0 0 36a15 15 0 1 1 0-36z" fill="#f4c430"/><path d="M41 31l4 4 8-9" stroke="#fff" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div>
+        <h1>Gelişim Takip</h1>
+        <div class="sub" id="todayLabel"></div>
+      </div>
+    </div>
+    <div class="top-right">
+      <button class="icon-btn" id="settingsBtn" title="Ayarlar" aria-label="Ayarlar">
+        <svg viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 1 0-7a3.5 3.5 0 0 1 0 7zm7.4-2.5a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.4-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3.3h-4l-.3 2.7a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.4L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.4 2.5-1c.5.4 1.1.7 1.7 1l.3 2.7h4l.3-2.7c.6-.3 1.2-.6 1.7-1l2.5 1 2-3.4z"/></svg>
+      </button>
+      <button class="prayer-widget" id="prayerWidget" aria-haspopup="true">
+        <span class="pw-label" id="pwLabel">Vakitler</span>
+        <span class="pw-time" id="pwTime">--:--</span>
+        <span class="pw-count" id="pwCount"></span>
+      </button>
+    </div>
+  </header>
+
+  <div class="popover" id="timesPopover" hidden></div>
+
+  <main class="layout">
+    <section class="card cal-card">
+      <div class="cal-head">
+        <button class="icon-btn" id="prevMonth" aria-label="Önceki ay">‹</button>
+        <h2 id="monthTitle"></h2>
+        <button class="icon-btn" id="nextMonth" aria-label="Sonraki ay">›</button>
+        <button class="pill-btn" id="todayBtn">Bugün</button>
+      </div>
+      <div class="weekdays" id="weekdays"></div>
+      <div class="cal-grid" id="calGrid"></div>
+      <div class="legend">
+        <span><i class="sw full"></i>Tamamlandı (7/7)</span>
+        <span><i class="sw half"></i>Yarısı geçti</span>
+        <span><i class="sw low"></i>Başlandı</span>
+      </div>
+    </section>
+
+    <aside class="side">
+      <section class="card" id="todayCard"></section>
+      <section class="card" id="goalsCard"></section>
+      <section class="card" id="statsCard"></section>
+    </aside>
+  </main>
+
+  <div class="overlay" id="dayModal" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" id="daySheet"></div>
+  </div>
+
+  <div class="overlay" id="settingsModal" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" id="settingsSheet"></div>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
