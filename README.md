@@ -16,6 +16,18 @@ Günlük 5 vakit namaz, 2 set spor (10 dk barfiks + şınav), kişisel program v
 
 Tüm veriler tarayıcının `localStorage`'ında, yani sadece kullandığın cihazda durur.
 
+## Android uygulaması (APK)
+
+`main` dalına her gönderimde GitHub Actions APK'yı otomatik derler ve **Releases** sayfasına koyar
+(`.github/workflows/android.yml`, Capacitor 7).
+
+1. Telefondan repodaki **Releases** bölümünü aç, en üstteki sürümden `GelisimTakip.apk`'yı indir.
+2. Kurarken “Bilinmeyen kaynaklardan yükleme” izni istenirse ver.
+3. İlk açılışta Ayarlar → Namaz vakti bildirimleri'ni aç, izin ver; ardından **⏰ Tam zamanında bildirim** iznini aç.
+
+APK'da bildirimler uygulama kapalıyken de gelir (önümüzdeki 7 gün her açılışta yeniden kurulur).
+Yeni sürümler hep aynı anahtarla imzalandığı için eskisinin üzerine kurulur, veriler silinmez.
+
 ## Çalıştırma
 
 Derleme gerekmez. GitHub Pages ile yayınlamak için: **Settings → Pages → Branch: `main` / root**.
@@ -28,7 +40,7 @@ python3 -m http.server 8000
 
 ## Bilinen sınırlar (prototip)
 
-- Web bildirimleri uygulama açıkken veya arka planda açık dururken gelir; uygulama tamamen kapalıyken garanti değildir. iPhone'da bildirim için uygulamayı ana ekrana eklemek gerekir (iOS 16.4+). Kapalıyken de kesin bildirim için ileride Capacitor ile yerel (native) uygulamaya çevrilebilir.
+- (Web sürümü) Web bildirimleri uygulama açıkken veya arka planda açık dururken gelir; uygulama tamamen kapalıyken garanti değildir. iPhone'da bildirim için uygulamayı ana ekrana eklemek gerekir (iOS 16.4+). Kapalıyken bildirim için Android APK'yı kullan.
 - Veriler cihazlar arasında senkronize olmaz.
 
 ## Dosyalar

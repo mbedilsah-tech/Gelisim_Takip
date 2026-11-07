@@ -266,6 +266,7 @@ function toggleItem(key, kind, i) {
   if (after >= TOTAL && before < TOTAL) toast('Maşallah! Günün tüm hedefleri tamam ⭐', 'gold');
   else if (after >= TOTAL / 2 && before < TOTAL / 2) toast('Günün yarısı tamam, devam! 💪');
   renderAll();
+  if (Native.LN) scheduleNotifications();
 }
 
 /* ---------- Bileşenler ---------- */
@@ -498,7 +499,7 @@ function renderDayModal() {
 function renderSettings() {
   const s = state.settings;
   const known = CITIES.some(c => c[0] === s.city);
-  const perm = typeof Notification === 'undefined' ? 'desteklenmiyor' :
+  const perm = Native.LN ? 'telefon bildirimi' : typeof Notification === 'undefined' ? 'desteklenmiyor' :
     Notification.permission === 'granted' ? 'izin verildi' : Notification.permission === 'denied' ? 'engellendi' : 'izin istenmedi';
   document.getElementById('settingsSheet').innerHTML = `
     <div class="sheet-head"><h2>Ayarlar</h2><button class="icon-btn" data-act="close" aria-label="Kapat">×</button></div>
@@ -528,12 +529,14 @@ function renderSettings() {
       <label>Spor açıklaması
         <input class="field" id="setSportText" value="${esc(s.sportText)}" maxlength="60">
       </label>
-      <div class="form-row"><button class="pill-btn" data-act="test-notify">🔔 Deneme bildirimi</button></div>
-      <p class="hint" style="margin:0">Bildirimler uygulama açıkken ya da arka planda bir sekmede açık dururken gelir. Telefonda “Ana ekrana ekle” ile kurman önerilir (iPhone'da bildirim için şart).</p>
+      <div class="form-row"><button class="pill-btn" data-act="test-notify">🔔 Deneme bildirimi</button>${Native.LN ? '<button class="pill-btn" data-act="exact">⏰ Tam zamanında bildirim</button>' : ''}</div>
+      <p class="hint" style="margin:0">${Native.LN
+        ? 'Bildirimler uygulama kapalıyken de gelir; her açılışta önümüzdeki 7 gün kurulur. Haftada bir uygulamayı açman yeterli.'
+        : 'Bildirimler uygulama açıkken ya da arka planda bir sekmede açık dururken gelir. Telefonda “Ana ekrana ekle” ile kurman önerilir (iPhone\'da bildirim için şart).'}</p>
       <hr class="sep">
       <div class="form-row">
         <button class="pill-btn" data-act="export">⬇️ Yedeği indir</button>
-        <label class="pill-btn" style="display:inline-block;font-weight:400">⬆️ Yedek yükle<input type="file" accept="application/json" id="importFile" hidden></label>
+        <label class="pill-btn" style="display:inline-block;font-weight:400">⬆️ Yedek yükle<input type="file" accept=".json,.txt,application/json,text/plain" id="importFile" hidden></label>
       </div>
       <p class="hint" style="margin:0">Veriler sadece bu cihazda/tarayıcıda saklanır. Ara sıra yedek almanı öneririm.</p>
     </div>`;
@@ -551,6 +554,62 @@ function renderAll() {
 /* ---------- Bildirimler ---------- */
 let swReg = null;
 let timers = [];
+
+// Android uygulaması (Capacitor) içinde çalışıyorsak yerel bildirim eklentisi
+const Native = (() => {
+  const C = window.Capacitor;
+  const isNative = !!(C && typeof C.isNativePlatform === 'function' && C.isNativePlatform());
+  return { isNative, LN: isNative && C.Plugins ? C.Plugins.LocalNotifications : null };
+})();
+
+const NATIVE_DAYS = 7; // kaç günlük bildirim önceden kurulsun
+let nativeChain = Promise.resolve();
+
+function nativeSchedule() {
+  const LN = Native.LN;
+  if (!LN) return;
+  nativeChain = nativeChain.then(async () => {
+    const pending = await LN.getPending();
+    if (pending && pending.notifications && pending.notifications.length) {
+      await LN.cancel({ notifications: pending.notifications.map(n => ({ id: n.id })) });
+    }
+    const s = state.settings;
+    if (!s.notify && !s.sportNotify) return;
+    const now = new Date();
+    const list = [];
+    for (let d = 0; d < NATIVE_DAYS; d++) {
+      const date = addDays(new Date(now.getFullYear(), now.getMonth(), now.getDate()), d);
+      const day = getDay(keyOf(date));
+      if (s.notify) {
+        const t = Times.get(date);
+        PRAYERS.forEach((p, i) => {
+          const at = new Date(atTime(date, t[p.t]) - Number(s.before) * 60000);
+          if (at <= now || (day && day.p[i])) return;
+          list.push({
+            id: d * 100 + i + 1,
+            title: `${p.name} namazı`,
+            body: Number(s.before) ? `${s.before} dk sonra vakit giriyor (${t[p.t]})` : `Vakit girdi · ${t[p.t]}`,
+            schedule: { at, allowWhileIdle: true },
+          });
+        });
+      }
+      if (s.sportNotify) {
+        s.sportTimes.forEach((time, i) => {
+          if (!time) return;
+          const at = atTime(date, time);
+          if (at <= now || (day && day.s[i])) return;
+          list.push({
+            id: d * 100 + 50 + i,
+            title: `Spor · ${SPORTS[i].name}`,
+            body: s.sportText,
+            schedule: { at, allowWhileIdle: true },
+          });
+        });
+      }
+    }
+    if (list.length) await LN.schedule({ notifications: list });
+  }).catch(() => { /* izin yoksa sessizce geç */ });
+}
 
 function toast(msg, kind) {
   const el = document.getElementById('toast');
@@ -575,6 +634,10 @@ function beep() {
 function notify(title, body, tag) {
   toast(`🔔 ${title} — ${body}`);
   beep();
+  if (Native.LN) {
+    Native.LN.schedule({ notifications: [{ id: 9999, title, body, schedule: { at: new Date(Date.now() + 1500) } }] }).catch(() => {});
+    return;
+  }
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
   const opts = { body, tag, icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', renotify: true };
   try {
@@ -586,6 +649,7 @@ function notify(title, body, tag) {
 function scheduleNotifications() {
   timers.forEach(clearTimeout);
   timers = [];
+  if (Native.LN) { nativeSchedule(); return; }
   const s = state.settings;
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -616,6 +680,16 @@ function scheduleNotifications() {
 }
 
 async function enableNotifications() {
+  if (Native.LN) {
+    try {
+      const r = await Native.LN.requestPermissions();
+      if (r.display === 'granted') {
+        toast('Bildirimler açık ✅');
+        nativeExactCheck();
+      } else toast('Bildirim izni verilmedi. Telefon ayarlarından açabilirsin.');
+    } catch (e) { toast('Bildirim izni alınamadı.'); }
+    return;
+  }
   if (typeof Notification === 'undefined') {
     toast('Bu tarayıcı bildirimleri desteklemiyor. Uygulama içi uyarı kullanılacak.');
     return;
@@ -627,6 +701,19 @@ async function enableNotifications() {
   } catch (e) {
     toast('Bildirim izni alınamadı.');
   }
+}
+
+// Android 12+: vaktinde (gecikmesiz) bildirim için "Alarm ve hatırlatıcı" izni
+async function nativeExactCheck(open) {
+  const LN = Native.LN;
+  if (!LN || typeof LN.checkExactNotificationSetting !== 'function') return;
+  try {
+    const r = await LN.checkExactNotificationSetting();
+    if (r.exact_alarm !== 'granted') {
+      if (open) await LN.changeExactNotificationSetting();
+      else toast('İpucu: Ayarlar → “Tam zamanında bildirim” iznini açarsan bildirimler gecikmez.');
+    } else if (open) toast('Tam zamanında bildirim izni zaten açık ✅');
+  } catch (e) { /* yok say */ }
 }
 
 /* ---------- Olaylar ---------- */
@@ -659,6 +746,7 @@ document.addEventListener('click', e => {
       save(); renderAll(); break;
     }
     case 'geo': useLocation(); break;
+    case 'exact': nativeExactCheck(true); break;
     case 'test-notify': notify('Deneme', 'Bildirimler çalışıyor 🎉', 'test'); break;
     case 'export': exportData(); break;
   }
@@ -749,6 +837,13 @@ function useLocation() {
 }
 
 function exportData() {
+  if (Native.isNative) {
+    const txt = JSON.stringify(state);
+    (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject())
+      .then(() => toast('Yedek panoya kopyalandı. Kendine mesaj/not olarak kaydet 📋'))
+      .catch(() => toast('Yedek kopyalanamadı.'));
+    return;
+  }
   try {
     const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
@@ -797,7 +892,7 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden) { renderAll(); renderWidget(); scheduleNotifications(); }
 });
 
-if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+if (!Native.isNative && 'serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
   navigator.serviceWorker.register('sw.js').then(reg => { swReg = reg; }).catch(() => { /* önizlemede SW yok */ });
 }
 

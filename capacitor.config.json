@@ -1,0 +1,14 @@
+{
+  "appId": "com.mbedilsah.gelisimtakip",
+  "appName": "Gelişim Takip",
+  "webDir": "www",
+  "android": {
+    "adjustMarginsForEdgeToEdge": "force"
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_notify",
+      "iconColor": "#1f6b52"
+    }
+  }
+}
