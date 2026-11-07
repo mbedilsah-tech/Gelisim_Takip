@@ -1,15 +1,17 @@
 # Gelişim Takip
 
-Günlük 5 vakit namaz, 2 set spor (10 dk barfiks + şınav), kişisel program ve haftalık/aylık hedef takibi için basit bir web uygulaması (PWA). Telefonda “Ana ekrana ekle” ile uygulama gibi kurulabilir.
+Günlük 5 vakit namaz, opsiyonel günlük hedefler (spor vb.), kişisel program ve haftalık/aylık hedef takibi için basit bir web uygulaması (PWA). Telefonda “Ana ekrana ekle” ile uygulama gibi kurulabilir.
 
 ## Özellikler
 
-- **Takvim:** Güne tıkla → kıldığın namazları ve yaptığın spor setlerini işaretle, program ekle, not yaz.
-- **Renkler:** 7/7 tamamlanan gün **sarı** ⭐, yarısı (4/7) geçen gün **yeşil**, başlanmış gün açık gri.
+- **Takvim:** Güne tıkla → kıldığın namazları ve opsiyonel hedefleri işaretle, program ekle, not yaz.
+- **Renkler (kılınan vakit sayısı):** 0 beyaz → 1 açık yeşil → 2 koyu yeşil → 3 açık mavi → 4 koyu mavi → 5 **mor** 💜
+- **Yıldızlar:** O gün tamamlanan her opsiyonel hedef günün üstüne bir ★ ekler.
+- **Opsiyonel hedefler:** Spor setleri vb. eklenip çıkarılabilir, istenirse hatırlatma saati verilir.
 - **Canlı namaz vakti (sağ üst):** Sıradaki vakit ve geri sayım. Tıklayınca günün tüm vakitleri.
   - İnternet varsa [aladhan.com](https://aladhan.com) üzerinden **Diyanet hesaplama yöntemi** (method=13) ile alınır ve aylık önbelleğe yazılır.
   - İnternet yoksa aynı yöntemle cihazda hesaplanır (±1–2 dk).
-- **Bildirimler:** Namaz vakitlerinde (veya 5–30 dk önce) ve spor saatlerinde hatırlatma. Zaten işaretlediysen hatırlatmaz.
+- **Bildirimler:** Ezandan 30 dk önce “Ezana 30 dk kaldı”, vakitten 15 dk sonra “Namazı kıldın mı?” (süreler ayarlanabilir; telefonda “Kıldım ✅” düğmesiyle işaretlenir). Kılınan namaz için soru gelmez.
 - **Hedefler:** Haftalık (“Mülk suresini oku”) ve aylık (“Bir kitap bitir”) hedef listeleri.
 - **Özet:** Aylık tam gün sayısı, üst üste tam gün serisi, namaz yüzdesi, spor seti sayısı.
 - **Yedek:** Ayarlar → Yedeği indir / Yedek yükle (JSON).
