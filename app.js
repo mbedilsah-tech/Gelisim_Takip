@@ -391,7 +391,9 @@ function renderCalendar() {
 
 function renderToday() {
   const key = todayKey();
-  document.getElementById('todayCard').innerHTML = `
+  const st = ui.nstatus;
+  const warn = st && st.problems ? `<button class="warn" data-act="open-settings">⚠️ Bildirimler uygulama kapalıyken gelmeyebilir — ${st.problems} ayar eksik. <b>Düzelt</b></button>` : '';
+  document.getElementById('todayCard').innerHTML = `${warn}
     <h3><span>Bugün</span><button class="pill-btn" data-act="open-day" data-key="${key}">Program & not</button></h3>
     ${checklistHTML(key)}`;
 }
@@ -560,6 +562,7 @@ function renderSettings() {
         <span class="hint">Şu an: ${Number(s.lat).toFixed(3)}, ${Number(s.lng).toFixed(3)}</span>
       </div>
       <hr class="sep">
+      ${Native.LN ? `<div><div class="sec-title" style="margin-top:0"><span>Bildirim durumu</span></div>${nativeStatusHTML()}</div><hr class="sep">` : ''}
       <div class="switch"><span>Namaz bildirimleri<br><span class="hint">Durum: ${perm}</span></span><input type="checkbox" id="setNotify" ${s.notify ? 'checked' : ''}></div>
       <label>Ezandan önce hatırlat
         <select class="field" id="setPre">${opt([0, 10, 15, 20, 30, 45, 60], s.pre, v => v ? `${v} dk önce · “Ezana ${v} dk kaldı”` : 'Kapalı')}</select>
@@ -571,7 +574,7 @@ function renderSettings() {
       <div class="form-row">
         <button class="pill-btn" data-act="open-habits">★ Opsiyonel hedefler</button>
         <button class="pill-btn" data-act="test-notify">🔔 Deneme bildirimi</button>
-        ${Native.LN ? '<button class="pill-btn" data-act="exact">⏰ Tam zamanında bildirim</button>' : ''}
+        ${Native.LN ? '<button class="pill-btn" data-act="test-closed">⏱️ Kapalıyken test (1 dk)</button>' : ''}
       </div>
       <p class="hint" style="margin:0">${Native.LN
         ? 'Bildirimler uygulama kapalıyken de gelir; her açılışta önümüzdeki 7 gün kurulur. “Kıldın mı?” bildirimindeki “Kıldım ✅” düğmesi namazı işaretler. Kıldığın namaz için soru gelmez.'
@@ -609,8 +612,11 @@ let timers = [];
 const Native = (() => {
   const C = window.Capacitor;
   const isNative = !!(C && typeof C.isNativePlatform === 'function' && C.isNativePlatform());
-  return { isNative, LN: isNative && C.Plugins ? C.Plugins.LocalNotifications : null };
+  const P = isNative && C.Plugins ? C.Plugins : {};
+  return { isNative, LN: P.LocalNotifications || null, Bat: P.Battery || null };
 })();
+const CHANNEL = 'hatirlatma';
+const TEST_IDS = [9998, 9999]; // test bildirimleri yeniden planlamada silinmesin
 
 const NATIVE_DAYS = 7; // kaç günlük bildirim önceden kurulsun
 
@@ -667,21 +673,20 @@ function nativeSchedule() {
   if (!LN) return;
   nativeChain = nativeChain.then(async () => {
     const pending = await LN.getPending();
-    if (pending && pending.notifications && pending.notifications.length) {
-      await LN.cancel({ notifications: pending.notifications.map(n => ({ id: n.id })) });
-    }
+    const old = (pending && pending.notifications || []).filter(n => !TEST_IDS.includes(Number(n.id)));
+    if (old.length) await LN.cancel({ notifications: old.map(n => ({ id: n.id })) });
     const now = new Date();
     const base = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const list = [];
     for (let d = 0; d < NATIVE_DAYS; d++) {
       for (const r of remindersFor(addDays(base, d), d, now)) {
-        const n = { id: r.id, title: r.title, body: r.body, schedule: { at: r.at, allowWhileIdle: true } };
+        const n = { id: r.id, title: r.title, body: r.body, channelId: CHANNEL, schedule: { at: r.at, allowWhileIdle: true } };
         if (r.action) { n.actionTypeId = r.action; n.extra = r.extra; }
         list.push(n);
       }
     }
     if (list.length) await LN.schedule({ notifications: list });
-  }).catch(() => { /* izin yoksa sessizce geç */ });
+  }).catch(() => { /* izin yoksa sessizce geç */ }).then(refreshNativeStatus);
 }
 
 function markFromNotification(extra) {
@@ -696,6 +701,18 @@ function markFromNotification(extra) {
 function initNativeActions() {
   const LN = Native.LN;
   if (!LN) return;
+  // Yüksek öncelikli kanal: sesli + titreşimli, ekranın üstünde görünür
+  nativeChain = nativeChain.then(() => LN.createChannel({
+    id: CHANNEL, name: 'Namaz ve hedef hatırlatmaları', description: 'Ezan öncesi, kıldın mı ve opsiyonel hedef hatırlatmaları',
+    importance: 5, visibility: 1, vibration: true, lights: true,
+  })).catch(() => {});
+  // İlk açılış: bildirimleri varsayılan aç ve izinleri iste
+  if (!state.settings.nativeSetup) {
+    state.settings.nativeSetup = true;
+    state.settings.notify = true;
+    save();
+    setTimeout(() => enableNotifications(), 800);
+  }
   try {
     LN.registerActionTypes({
       types: [
@@ -733,7 +750,7 @@ function notify(title, body, tag) {
   toast(`🔔 ${title} — ${body}`);
   beep();
   if (Native.LN) {
-    Native.LN.schedule({ notifications: [{ id: 9999, title, body, schedule: { at: new Date(Date.now() + 1500) } }] }).catch(() => {});
+    Native.LN.schedule({ notifications: [{ id: 9999, title, body, channelId: CHANNEL, schedule: { at: new Date(Date.now() + 1500), allowWhileIdle: true } }] }).catch(() => {});
     return;
   }
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
@@ -769,9 +786,10 @@ async function enableNotifications() {
       const r = await Native.LN.requestPermissions();
       if (r.display === 'granted') {
         toast('Bildirimler açık ✅');
-        nativeExactCheck();
-      } else toast('Bildirim izni verilmedi. Telefon ayarlarından açabilirsin.');
+        scheduleNotifications();
+      } else toast('Bildirim izni verilmedi. Ayarlar → Bildirim durumu bölümünden açabilirsin.');
     } catch (e) { toast('Bildirim izni alınamadı.'); }
+    refreshNativeStatus();
     return;
   }
   if (typeof Notification === 'undefined') {
@@ -795,9 +813,62 @@ async function nativeExactCheck(open) {
     const r = await LN.checkExactNotificationSetting();
     if (r.exact_alarm !== 'granted') {
       if (open) await LN.changeExactNotificationSetting();
-      else toast('İpucu: Ayarlar → “Tam zamanında bildirim” iznini açarsan bildirimler gecikmez.');
+      else refreshNativeStatus();
     } else if (open) toast('Tam zamanında bildirim izni zaten açık ✅');
   } catch (e) { /* yok say */ }
+}
+
+/* ---------- Telefon bildirim durumu (teşhis) ---------- */
+ui.nstatus = null;
+async function refreshNativeStatus() {
+  const LN = Native.LN;
+  if (!LN) return;
+  const st = { perm: 'unknown', exact: 'unknown', battery: null, manufacturer: '', pending: 0, next: null };
+  try { st.perm = (await LN.checkPermissions()).display; } catch (e) { /* yok say */ }
+  try { if (LN.checkExactNotificationSetting) st.exact = (await LN.checkExactNotificationSetting()).exact_alarm; } catch (e) { /* yok say */ }
+  try { if (Native.Bat) { const b = await Native.Bat.status(); st.battery = !!b.ignoring; st.manufacturer = b.manufacturer || ''; } } catch (e) { /* yok say */ }
+  try {
+    const p = await LN.getPending();
+    const list = (p && p.notifications || []).filter(n => !TEST_IDS.includes(Number(n.id)));
+    st.pending = list.length;
+    let best = null;
+    for (const n of list) {
+      const at = n.schedule && n.schedule.at ? new Date(n.schedule.at) : null;
+      if (at && !isNaN(at) && (!best || at < best.at)) best = { at, title: n.title };
+    }
+    st.next = best;
+  } catch (e) { /* yok say */ }
+  st.problems = (st.perm !== 'granted' ? 1 : 0) + (st.exact !== 'granted' && st.exact !== 'unknown' ? 1 : 0) + (st.battery === false ? 1 : 0);
+  ui.nstatus = st;
+  renderToday();
+  if (ui.sheet === 'settings') renderSettings();
+}
+
+function brandHint(man) {
+  const m = (man || '').toLowerCase();
+  if (/xiaomi|redmi|poco/.test(m)) return 'Xiaomi/Redmi/POCO: “Otomatik başlatma”yı aç; Pil tasarrufu → “Kısıtlama yok” seç; son uygulamalarda uygulamayı aşağı çekip 🔒 kilitle.';
+  if (/samsung/.test(m)) return 'Samsung: Ayarlar → Pil → Arka plan kullanım sınırları → “Uyku modundaki uygulamalar”dan bu uygulamayı çıkar, “Hiç uyumayan uygulamalar”a ekle.';
+  if (/huawei|honor/.test(m)) return 'Huawei/Honor: Uygulama başlatma → bu uygulama için “Otomatik yönet”i kapat, üç izni de aç.';
+  if (/oppo|realme|oneplus/.test(m)) return 'Oppo/Realme/OnePlus: Otomatik başlatmaya izin ver; Pil → bu uygulama → “Arka planda etkinliğe izin ver”.';
+  if (/vivo|iqoo/.test(m)) return 'Vivo: Arka planda yüksek güç tüketimine izin ver ve otomatik başlatmayı aç.';
+  return 'Uygulamayı son kullanılanlardan kaydırıp kapatma; pil tasarrufu modunda bildirimler gecikebilir.';
+}
+
+function nativeStatusHTML() {
+  const st = ui.nstatus;
+  if (!Native.LN) return '';
+  if (!st) return '<p class="hint">Durum kontrol ediliyor…</p>';
+  const row = (ok, label, btn) => `<li class="${ok ? 'ok' : 'bad'}"><span>${ok ? '✅' : '⚠️'}</span><span class="txt">${label}</span>${ok || !btn ? '' : btn}</li>`;
+  const fmt = d => `${DAYS_LONG[d.getDay()]} ${hhmm(d.getHours() * 60 + d.getMinutes())}`;
+  return `
+    <ul class="items status">
+      ${row(st.perm === 'granted', 'Bildirim izni', '<button class="pill-btn primary" data-act="fix-perm">Aç</button>')}
+      ${st.exact === 'unknown' ? '' : row(st.exact === 'granted', 'Tam zamanında bildirim (alarm izni)', '<button class="pill-btn primary" data-act="exact">Aç</button>')}
+      ${st.battery === null ? '' : row(st.battery, 'Pil kısıtlaması yok', '<button class="pill-btn primary" data-act="battery">Kaldır</button>')}
+      ${Native.Bat ? `<li><span>🚀</span><span class="txt">Otomatik başlatma / arka plan izni</span><button class="pill-btn" data-act="autostart">Ayarı aç</button></li>` : ''}
+    </ul>
+    <p class="hint" style="margin:6px 0 0">${st.pending ? `Kurulu ${st.pending} bildirim var.${st.next ? ` Sıradaki: <b>${fmt(st.next.at)}</b> · ${esc(st.next.title)}` : ''}` : 'Kurulu bildirim yok — namaz bildirimlerini aç ya da izin ver.'}</p>
+    <p class="hint" style="margin:6px 0 0">${esc(brandHint(st.manufacturer))}</p>`;
 }
 
 /* ---------- Opsiyonel hedef yönetimi ---------- */
@@ -846,6 +917,17 @@ document.addEventListener('click', e => {
     }
     case 'geo': useLocation(); break;
     case 'exact': nativeExactCheck(true); break;
+    case 'fix-perm': enableNotifications(); break;
+    case 'battery': if (Native.Bat) Native.Bat.request().catch(() => {}); break;
+    case 'autostart': if (Native.Bat) Native.Bat.openAutostart().catch(() => {}); break;
+    case 'open-settings': ui.sheet = 'settings'; renderSheet(); refreshNativeStatus(); break;
+    case 'test-closed':
+      if (Native.LN) {
+        Native.LN.schedule({ notifications: [{ id: 9998, title: 'Test bildirimi ✅', body: 'Uygulama kapalıyken geldiyse ayarların tamam.', channelId: CHANNEL, schedule: { at: new Date(Date.now() + 60000), allowWhileIdle: true } }] })
+          .then(() => toast('1 dk sonra bildirim gelecek. Şimdi uygulamadan çık (ana ekrana dön) ve bekle.'))
+          .catch(() => toast('Test kurulamadı — önce bildirim iznini aç.'));
+      }
+      break;
     case 'test-notify': notify('Deneme', 'Bildirimler çalışıyor 🎉', 'test'); break;
     case 'export': exportData(); break;
   }
@@ -984,7 +1066,7 @@ function importData(file) {
 document.getElementById('prevMonth').onclick = () => { const d = new Date(ui.viewYear, ui.viewMonth - 1, 1); ui.viewYear = d.getFullYear(); ui.viewMonth = d.getMonth(); renderCalendar(); renderStats(); };
 document.getElementById('nextMonth').onclick = () => { const d = new Date(ui.viewYear, ui.viewMonth + 1, 1); ui.viewYear = d.getFullYear(); ui.viewMonth = d.getMonth(); renderCalendar(); renderStats(); };
 document.getElementById('todayBtn').onclick = () => { const n = new Date(); ui.viewYear = n.getFullYear(); ui.viewMonth = n.getMonth(); renderCalendar(); renderStats(); };
-document.getElementById('settingsBtn').onclick = () => { ui.sheet = 'settings'; renderSheet(); };
+document.getElementById('settingsBtn').onclick = () => { ui.sheet = 'settings'; renderSheet(); refreshNativeStatus(); };
 document.getElementById('prayerWidget').onclick = () => {
   const pop = document.getElementById('timesPopover');
   pop.hidden = !pop.hidden;
@@ -999,7 +1081,7 @@ setInterval(() => {
 }, 1000);
 
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) { renderAll(); renderWidget(); scheduleNotifications(); }
+  if (!document.hidden) { renderAll(); renderWidget(); scheduleNotifications(); refreshNativeStatus(); }
 });
 
 if (!Native.isNative && 'serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {

@@ -286,3 +286,13 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 4px 0; }
 }
 .toast.purple { background: var(--l5); color: #fff; font-weight: 700; }
 .toast.gold { background: linear-gradient(135deg, var(--full-a), var(--full-b)); color: var(--full-ink); font-weight: 700; }
+
+/* ---------- Bildirim durumu ---------- */
+.items.status li { gap: 8px; }
+.items.status li.bad { background: #fff5e8; border-color: #f0c98a; }
+.items.status li.ok { background: #eef7f1; }
+.items.status .pill-btn { padding: 5px 12px; }
+.warn {
+  display: block; width: 100%; text-align: left; margin-bottom: 12px; padding: 10px 12px; border-radius: 12px;
+  border: 1px solid #f0c98a; background: #fff5e8; color: #7a4b00; font-size: 13px;
+}
