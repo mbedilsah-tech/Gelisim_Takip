@@ -296,3 +296,11 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 4px 0; }
   display: block; width: 100%; text-align: left; margin-bottom: 12px; padding: 10px 12px; border-radius: 12px;
   border: 1px solid #f0c98a; background: #fff5e8; color: #7a4b00; font-size: 13px;
 }
+
+/* ---------- Namaz başına bildirim tablosu ---------- */
+.pn-grid { display: grid; grid-template-columns: 64px 1fr 1fr; gap: 6px 8px; align-items: center; }
+.pn-grid .field { padding: 7px 8px; font-size: 13px; width: 100%; min-width: 0; }
+.pn-h { font-size: 12px; font-weight: 700; color: var(--muted); line-height: 1.2; }
+.pn-h small { font-weight: 400; }
+.pn-name { font-weight: 700; font-size: 14px; }
+.pn-name.all { color: var(--muted); font-size: 13px; }

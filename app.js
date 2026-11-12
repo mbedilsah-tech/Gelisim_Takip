@@ -66,7 +66,9 @@ function defaultState() {
     settings: {
       city: 'İstanbul', lat: 41.0082, lng: 28.9784,
       notify: false,  // namaz bildirimleri
-      pre: 30,        // ezandan kaç dk önce "ezana X dk kaldı" (0 = kapalı)
+      // Namaz başına bildirim: pre = ezandan kaç dk önce "ezana X dk kaldı", check = vakitten kaç dk sonra "kıldın mı?" (0 = kapalı)
+      pn: [0, 1, 2, 3, 4].map(() => ({ pre: 30, check: 15 })),
+      pre: 30,        // (eski genel ayar; geçiş için tutuluyor)
       check: 15,      // vakitten kaç dk sonra "kıldın mı?" (0 = kapalı)
       habitNotify: true,
     },
@@ -89,6 +91,10 @@ function loadState() {
   };
   // v1 → v2 geçişi: spor setleri artık opsiyonel hedef
   if ('sportNotify' in old && !('habitNotify' in old)) out.settings.habitNotify = old.sportNotify;
+  // v2 → v3: genel önce/sonra ayarı her namaza ayrı ayrı taşınır
+  if (!Array.isArray(old.pn) || old.pn.length !== 5) {
+    out.settings.pn = [0, 1, 2, 3, 4].map(() => ({ pre: Number(out.settings.pre) || 0, check: Number(out.settings.check) || 0 }));
+  }
   delete out.settings.sportNotify; delete out.settings.sportTimes; delete out.settings.sportText; delete out.settings.before;
   for (const d of Object.values(out.days)) {
     if (!d.h) d.h = {};
@@ -547,6 +553,7 @@ function renderSettings() {
   const known = CITIES.some(c => c[0] === s.city);
   const perm = Native.LN ? 'telefon bildirimi' : typeof Notification === 'undefined' ? 'desteklenmiyor' :
     Notification.permission === 'granted' ? 'izin verildi' : Notification.permission === 'denied' ? 'engellendi' : 'izin istenmedi';
+  const MINS = [0, 5, 10, 15, 20, 30, 45, 60];
   const opt = (vals, cur, label) => vals.map(v => `<option value="${v}" ${Number(cur) === v ? 'selected' : ''}>${label(v)}</option>`).join('');
   document.getElementById('settingsSheet').innerHTML = `
     <div class="sheet-head"><h2>Ayarlar</h2><button class="icon-btn" data-act="close" aria-label="Kapat">×</button></div>
@@ -564,12 +571,21 @@ function renderSettings() {
       <hr class="sep">
       ${Native.LN ? `<div><div class="sec-title" style="margin-top:0"><span>Bildirim durumu</span></div>${nativeStatusHTML()}</div><hr class="sep">` : ''}
       <div class="switch"><span>Namaz bildirimleri<br><span class="hint">Durum: ${perm}</span></span><input type="checkbox" id="setNotify" ${s.notify ? 'checked' : ''}></div>
-      <label>Ezandan önce hatırlat
-        <select class="field" id="setPre">${opt([0, 10, 15, 20, 30, 45, 60], s.pre, v => v ? `${v} dk önce · “Ezana ${v} dk kaldı”` : 'Kapalı')}</select>
-      </label>
-      <label>Vakitten sonra sor
-        <select class="field" id="setCheck">${opt([0, 10, 15, 20, 30, 45, 60], s.check, v => v ? `${v} dk sonra · “Namazı kıldın mı?”` : 'Kapalı')}</select>
-      </label>
+      <div>
+        <div class="pn-grid">
+          <span class="pn-h"></span><span class="pn-h">Ezandan önce<br><small>“Ezana X dk kaldı”</small></span><span class="pn-h">Vakitten sonra<br><small>“Kıldın mı?”</small></span>
+          ${PRAYERS.map((p, i) => {
+            const pn = s.pn[i] || { pre: 0, check: 0 };
+            return `<span class="pn-name">${p.name}</span>
+              <select class="field" data-pn="${i}" data-pf="pre">${opt(MINS, pn.pre, v => v ? `${v} dk önce` : 'Kapalı')}</select>
+              <select class="field" data-pn="${i}" data-pf="check">${opt(MINS, pn.check, v => v ? `${v} dk sonra` : 'Kapalı')}</select>`;
+          }).join('')}
+          <span class="pn-name all">Hepsi</span>
+          <select class="field" data-pn="all" data-pf="pre"><option value="">Hepsine uygula…</option>${opt(MINS, -1, v => v ? `${v} dk önce` : 'Kapalı')}</select>
+          <select class="field" data-pn="all" data-pf="check"><option value="">Hepsine uygula…</option>${opt(MINS, -1, v => v ? `${v} dk sonra` : 'Kapalı')}</select>
+        </div>
+        <p class="hint" style="margin:6px 0 0">Her namaz için önce, sonra, ikisi ya da hiçbiri seçilebilir. Kıldığın namaz için bildirim gelmez.</p>
+      </div>
       <div class="switch"><span>Opsiyonel hedef hatırlatmaları<br><span class="hint">Saatleri “Opsiyonel hedefler”den ayarlanır</span></span><input type="checkbox" id="setHabitNotify" ${s.habitNotify ? 'checked' : ''}></div>
       <div class="form-row">
         <button class="pill-btn" data-act="open-habits">★ Opsiyonel hedefler</button>
@@ -631,18 +647,19 @@ function remindersFor(date, dayIndex, now) {
     PRAYERS.forEach((p, i) => {
       if (day && day.p[i]) return; // kılındıysa hiç hatırlatma yok
       const vakit = atTime(date, t[p.t]);
-      if (Number(s.pre)) {
+      const pn = s.pn[i] || { pre: 0, check: 0 };
+      if (Number(pn.pre)) {
         out.push({
           id: dayIndex * 100 + i * 2 + 1,
-          at: new Date(vakit - Number(s.pre) * 60000),
-          title: `${p.name} ezanına ${s.pre} dk kaldı`,
+          at: new Date(vakit - Number(pn.pre) * 60000),
+          title: `${p.name} ezanına ${pn.pre} dk kaldı`,
           body: `Vakit ${t[p.t]}. Hazırlanma zamanı 🕌`,
         });
       }
-      if (Number(s.check)) {
+      if (Number(pn.check)) {
         out.push({
           id: dayIndex * 100 + i * 2 + 2,
-          at: new Date(vakit.getTime() + Number(s.check) * 60000),
+          at: new Date(vakit.getTime() + Number(pn.check) * 60000),
           title: `${p.name} namazını kıldın mı?`,
           body: `Vakit ${t[p.t]}'de girdi. Kıldıysan işaretle ✅`,
           action: 'PRAYER_CHECK',
@@ -941,6 +958,16 @@ document.addEventListener('change', e => {
     if (g) { g.done = t.checked; save(); renderGoals(); if (g.done) toast('Hedef tamamlandı 🎯'); }
     return;
   }
+  if (t.dataset.pn) {
+    const f = t.dataset.pf;
+    if (t.value === '') return;
+    const v = Number(t.value);
+    if (t.dataset.pn === 'all') state.settings.pn.forEach(x => { x[f] = v; });
+    else state.settings.pn[Number(t.dataset.pn)][f] = v;
+    save(); scheduleNotifications();
+    if (t.dataset.pn === 'all') { renderSheet(); toast('Tüm namazlara uygulandı ✅'); }
+    return;
+  }
   if (t.dataset.habit) {
     const h = state.habits.find(x => x.id === t.dataset.habit);
     if (!h) return;
@@ -961,8 +988,6 @@ document.addEventListener('change', e => {
       if (t.checked) enableNotifications().then(() => { renderSheet(); scheduleNotifications(); });
       else scheduleNotifications();
       break;
-    case 'setPre': s.pre = Number(t.value); save(); scheduleNotifications(); break;
-    case 'setCheck': s.check = Number(t.value); save(); scheduleNotifications(); break;
     case 'setHabitNotify':
       s.habitNotify = t.checked; save();
       if (t.checked && (Native.LN || (typeof Notification !== 'undefined' && Notification.permission === 'default'))) enableNotifications();

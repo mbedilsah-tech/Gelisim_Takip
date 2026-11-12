@@ -11,7 +11,7 @@ Günlük 5 vakit namaz, opsiyonel günlük hedefler (spor vb.), kişisel program
 - **Canlı namaz vakti (sağ üst):** Sıradaki vakit ve geri sayım. Tıklayınca günün tüm vakitleri.
   - İnternet varsa [aladhan.com](https://aladhan.com) üzerinden **Diyanet hesaplama yöntemi** (method=13) ile alınır ve aylık önbelleğe yazılır.
   - İnternet yoksa aynı yöntemle cihazda hesaplanır (±1–2 dk).
-- **Bildirimler:** Ezandan 30 dk önce “Ezana 30 dk kaldı”, vakitten 15 dk sonra “Namazı kıldın mı?” (süreler ayarlanabilir; telefonda “Kıldım ✅” düğmesiyle işaretlenir). Kılınan namaz için soru gelmez.
+- **Bildirimler:** Her namaz için ayrı ayrı: ezandan önce “Ezana X dk kaldı” ve/veya vakitten sonra “Namazı kıldın mı?” (her biri açılıp kapatılabilir, süreler seçilebilir; telefonda “Kıldım ✅” düğmesiyle işaretlenir). Kılınan namaz için soru gelmez.
 - **Hedefler:** Haftalık (“Mülk suresini oku”) ve aylık (“Bir kitap bitir”) hedef listeleri.
 - **Özet:** Aylık tam gün sayısı, üst üste tam gün serisi, namaz yüzdesi, spor seti sayısı.
 - **Yedek:** Ayarlar → Yedeği indir / Yedek yükle (JSON).
