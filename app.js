@@ -1217,7 +1217,14 @@ setInterval(() => {
 }, 1000);
 
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) { renderAll(); renderWidget(); scheduleNotifications(); refreshNativeStatus(); }
+  if (!document.hidden) {
+    renderAll(); renderWidget(); scheduleNotifications(); refreshNativeStatus();
+    // Uygulama arka plandan öne gelince de güncelleme denetle (en fazla 10 dk'da bir)
+    if (typeof window.__checkUpdate === 'function' && Date.now() - (window.__lastUpdateCheck || 0) > 10 * 60000) {
+      window.__lastUpdateCheck = Date.now();
+      window.__checkUpdate(false).catch(() => { /* internet yoksa sorun değil */ });
+    }
+  }
 });
 
 if (!Native.isNative && 'serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -1226,6 +1233,7 @@ if (!Native.isNative && 'serviceWorker' in navigator && /^https?:$/.test(locatio
 
 initNativeActions();
 window.__appBooted = true; // yükleyici: kod sorunsuz açıldı
+window.__lastUpdateCheck = Date.now(); // açılışta yükleyici zaten denetliyor
 renderAll();
 renderWidget();
 scheduleNotifications();
