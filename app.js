@@ -15,6 +15,14 @@ const PRAYERS = [
   { name: 'Akşam', t: 'aksam' },
   { name: 'Yatsı', t: 'yatsi' },
 ];
+// Her namazın vakti bir sonraki vakitte çıkar
+const PRAYER_END = [
+  { t: 'gunes', label: 'Güneş doğuşuna' },
+  { t: 'ikindi', label: 'İkindi ezanına' },
+  { t: 'aksam', label: 'Akşam ezanına' },
+  { t: 'yatsi', label: 'Yatsı ezanına' },
+  { t: 'imsak', label: 'İmsak vaktine', nextDay: true },
+];
 const MONTHS = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
 const WEEKDAYS_SHORT = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
 const DAYS_LONG = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
@@ -66,8 +74,10 @@ function defaultState() {
     settings: {
       city: 'İstanbul', lat: 41.0082, lng: 28.9784,
       notify: false,  // namaz bildirimleri
-      // Namaz başına bildirim: pre = ezandan kaç dk önce "ezana X dk kaldı", check = vakitten kaç dk sonra "kıldın mı?" (0 = kapalı)
-      pn: [0, 1, 2, 3, 4].map(() => ({ pre: 30, check: 15 })),
+      // Namaz başına bildirim (0 = kapalı):
+      //   pre = ezandan kaç dk önce "ezana X dk kaldı"
+      //   end = vakit çıkmadan (sonraki ezandan) kaç dk önce "kıldın mı?"
+      pn: [0, 1, 2, 3, 4].map(() => ({ pre: 30, end: 30 })),
       pre: 30,        // (eski genel ayar; geçiş için tutuluyor)
       check: 15,      // vakitten kaç dk sonra "kıldın mı?" (0 = kapalı)
       habitNotify: true,
@@ -95,6 +105,8 @@ function loadState() {
   if (!Array.isArray(old.pn) || old.pn.length !== 5) {
     out.settings.pn = [0, 1, 2, 3, 4].map(() => ({ pre: Number(out.settings.pre) || 0, check: Number(out.settings.check) || 0 }));
   }
+  // v3 → v4: "kıldın mı?" artık vakitten sonra değil, vakit çıkmadan önce sorulur
+  out.settings.pn = out.settings.pn.map(x => ('end' in x) ? { pre: Number(x.pre) || 0, end: Number(x.end) || 0 } : { pre: Number(x.pre) || 0, end: Number(x.check) ? 30 : 0 });
   delete out.settings.sportNotify; delete out.settings.sportTimes; delete out.settings.sportText; delete out.settings.before;
   for (const d of Object.values(out.days)) {
     if (!d.h) d.h = {};
@@ -553,7 +565,7 @@ function renderSettings() {
   const known = CITIES.some(c => c[0] === s.city);
   const perm = Native.LN ? 'telefon bildirimi' : typeof Notification === 'undefined' ? 'desteklenmiyor' :
     Notification.permission === 'granted' ? 'izin verildi' : Notification.permission === 'denied' ? 'engellendi' : 'izin istenmedi';
-  const MINS = [0, 5, 10, 15, 20, 30, 45, 60];
+  const MINS = [0, 5, 10, 15, 20, 30, 45, 60, 90, 120];
   const opt = (vals, cur, label) => vals.map(v => `<option value="${v}" ${Number(cur) === v ? 'selected' : ''}>${label(v)}</option>`).join('');
   document.getElementById('settingsSheet').innerHTML = `
     <div class="sheet-head"><h2>Ayarlar</h2><button class="icon-btn" data-act="close" aria-label="Kapat">×</button></div>
@@ -573,18 +585,18 @@ function renderSettings() {
       <div class="switch"><span>Namaz bildirimleri<br><span class="hint">Durum: ${perm}</span></span><input type="checkbox" id="setNotify" ${s.notify ? 'checked' : ''}></div>
       <div>
         <div class="pn-grid">
-          <span class="pn-h"></span><span class="pn-h">Ezandan önce<br><small>“Ezana X dk kaldı”</small></span><span class="pn-h">Vakitten sonra<br><small>“Kıldın mı?”</small></span>
+          <span class="pn-h"></span><span class="pn-h">Ezandan önce<br><small>“Ezana X dk kaldı”</small></span><span class="pn-h">Vakit çıkmadan<br><small>“Kıldın mı?”</small></span>
           ${PRAYERS.map((p, i) => {
-            const pn = s.pn[i] || { pre: 0, check: 0 };
+            const pn = s.pn[i] || { pre: 0, end: 0 };
             return `<span class="pn-name">${p.name}</span>
               <select class="field" data-pn="${i}" data-pf="pre">${opt(MINS, pn.pre, v => v ? `${v} dk önce` : 'Kapalı')}</select>
-              <select class="field" data-pn="${i}" data-pf="check">${opt(MINS, pn.check, v => v ? `${v} dk sonra` : 'Kapalı')}</select>`;
+              <select class="field" data-pn="${i}" data-pf="end">${opt(MINS, pn.end, v => v ? `${v} dk kala` : 'Kapalı')}</select>`;
           }).join('')}
           <span class="pn-name all">Hepsi</span>
           <select class="field" data-pn="all" data-pf="pre"><option value="">Hepsine uygula…</option>${opt(MINS, -1, v => v ? `${v} dk önce` : 'Kapalı')}</select>
-          <select class="field" data-pn="all" data-pf="check"><option value="">Hepsine uygula…</option>${opt(MINS, -1, v => v ? `${v} dk sonra` : 'Kapalı')}</select>
+          <select class="field" data-pn="all" data-pf="end"><option value="">Hepsine uygula…</option>${opt(MINS, -1, v => v ? `${v} dk kala` : 'Kapalı')}</select>
         </div>
-        <p class="hint" style="margin:6px 0 0">Her namaz için önce, sonra, ikisi ya da hiçbiri seçilebilir. Kıldığın namaz için bildirim gelmez.</p>
+        <p class="hint" style="margin:6px 0 0">“Kıldın mı?” sorusu namazın vakti çıkmadan önce gelir: Sabah → güneş doğuşu, Öğle → İkindi, İkindi → Akşam, Akşam → Yatsı, Yatsı → İmsak. Kıldığın namaz için bildirim gelmez.</p>
       </div>
       <div class="switch"><span>Opsiyonel hedef hatırlatmaları<br><span class="hint">Saatleri “Opsiyonel hedefler”den ayarlanır</span></span><input type="checkbox" id="setHabitNotify" ${s.habitNotify ? 'checked' : ''}></div>
       <div class="form-row">
@@ -653,26 +665,38 @@ function remindersFor(date, dayIndex, now) {
     PRAYERS.forEach((p, i) => {
       if (day && day.p[i]) return; // kılındıysa hiç hatırlatma yok
       const vakit = atTime(date, t[p.t]);
-      const pn = s.pn[i] || { pre: 0, check: 0 };
+      const pn = s.pn[i] || { pre: 0, end: 0 };
       if (Number(pn.pre)) {
         out.push({
           id: dayIndex * 100 + i * 2 + 1,
           at: new Date(vakit - Number(pn.pre) * 60000),
           title: `${p.name} ezanına ${pn.pre} dk kaldı`,
           body: `Vakit ${t[p.t]}. Hazırlanma zamanı 🕌`,
+          pre: i,
         });
       }
-      if (Number(pn.check)) {
-        out.push({
-          id: dayIndex * 100 + i * 2 + 2,
-          at: new Date(vakit.getTime() + Number(pn.check) * 60000),
-          title: `${p.name} namazını kıldın mı?`,
-          body: `Vakit ${t[p.t]}'de girdi. Kıldıysan işaretle ✅`,
-          action: 'PRAYER_CHECK',
-          extra: { key, kind: 'p', id: String(i), label: `${p.name} namazı` },
-        });
+      if (Number(pn.end)) {
+        const e = PRAYER_END[i];
+        const endDate = e.nextDay ? addDays(date, 1) : date;
+        const endStr = (e.nextDay ? Times.get(endDate) : t)[e.t];
+        const at = new Date(atTime(endDate, endStr) - Number(pn.end) * 60000);
+        if (at > vakit) {
+          out.push({
+            id: dayIndex * 100 + i * 2 + 2,
+            at,
+            title: `${p.name} namazını kıldın mı?`,
+            body: `${e.label} ${pn.end} dk kaldı (${endStr}). Kıldıysan işaretle ✅`,
+            action: 'PRAYER_CHECK',
+            extra: { key, kind: 'p', id: String(i), label: `${p.name} namazı` },
+          });
+        }
       }
     });
+    // Aynı dakikaya düşen "X ezanına kaldı" ile önceki namazın "kıldın mı?" sorusunu tek bildirimde birleştir
+    for (const q of out.filter(r => r.action === 'PRAYER_CHECK')) {
+      const dup = out.find(r => r.pre !== undefined && Math.abs(r.at - q.at) < 60000);
+      if (dup) { q.body = `${dup.title} (${t[PRAYERS[dup.pre].t]}). Kıldıysan işaretle ✅`; out.splice(out.indexOf(dup), 1); }
+    }
   }
   if (s.habitNotify) {
     state.habits.forEach((h, j) => {
