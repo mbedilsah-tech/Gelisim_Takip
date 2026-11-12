@@ -304,3 +304,18 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 4px 0; }
 .pn-h small { font-weight: 400; }
 .pn-name { font-weight: 700; font-size: 14px; }
 .pn-name.all { color: var(--muted); font-size: 13px; }
+
+/* ---------- Namaz başına bildirim kartları ---------- */
+.pn-list { display: grid; gap: 8px; }
+.pn-card { border: 1px solid var(--line); border-radius: 12px; padding: 10px; background: #fbfaf6; display: grid; gap: 6px; }
+.pn-card.all { background: transparent; border-style: dashed; }
+.pn-card .pn-name { font-weight: 800; font-size: 15px; }
+.pn-card.all .pn-name { color: var(--muted); font-size: 13px; }
+.pn-row { display: grid; grid-template-columns: 92px 1fr; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); font-weight: 600; }
+.pn-ask { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+
+.pn-ask .field, .pn-row > .field { flex: 1; min-width: 0; width: 100%; padding: 7px 8px; font-size: 13px; }
+.pn-prev { font-size: 12px; color: var(--accent); font-weight: 600; }
+.pn-row.ask { grid-template-columns: 1fr; gap: 4px; }
+.pn-row.ask .pn-ask { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.pn-row.ask .pn-ask .field:only-child { grid-column: 1 / -1; }

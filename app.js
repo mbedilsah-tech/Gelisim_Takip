@@ -77,7 +77,9 @@ function defaultState() {
       // Namaz başına bildirim (0 = kapalı):
       //   pre = ezandan kaç dk önce "ezana X dk kaldı"
       //   end = vakit çıkmadan (sonraki ezandan) kaç dk önce "kıldın mı?"
-      pn: [0, 1, 2, 3, 4].map(() => ({ pre: 30, end: 30 })),
+      //   ask = "kıldın mı?" ne zaman: 'off' | 'after' (ezandan askMin dk sonra)
+      //         | 'end' (sonraki vakitten askMin dk önce) | 'clock' (askTime saatinde)
+      pn: [0, 1, 2, 3, 4].map(() => ({ pre: 30, ask: 'end', askMin: 30, askTime: '' })),
       pre: 30,        // (eski genel ayar; geçiş için tutuluyor)
       check: 15,      // vakitten kaç dk sonra "kıldın mı?" (0 = kapalı)
       habitNotify: true,
@@ -106,7 +108,11 @@ function loadState() {
     out.settings.pn = [0, 1, 2, 3, 4].map(() => ({ pre: Number(out.settings.pre) || 0, check: Number(out.settings.check) || 0 }));
   }
   // v3 → v4: "kıldın mı?" artık vakitten sonra değil, vakit çıkmadan önce sorulur
-  out.settings.pn = out.settings.pn.map(x => ('end' in x) ? { pre: Number(x.pre) || 0, end: Number(x.end) || 0 } : { pre: Number(x.pre) || 0, end: Number(x.check) ? 30 : 0 });
+  out.settings.pn = out.settings.pn.map(x => ('end' in x || 'ask' in x) ? x : { pre: Number(x.pre) || 0, end: Number(x.check) ? 30 : 0 });
+  // v4 → v5: "kıldın mı?" istenen zamanda: ezandan sonra / vakit çıkmadan / belirli saatte
+  out.settings.pn = out.settings.pn.map(x => ('ask' in x) ? x : {
+    pre: Number(x.pre) || 0, ask: Number(x.end) ? 'end' : 'off', askMin: Number(x.end) || 30, askTime: '',
+  });
   delete out.settings.sportNotify; delete out.settings.sportTimes; delete out.settings.sportText; delete out.settings.before;
   for (const d of Object.values(out.days)) {
     if (!d.h) d.h = {};
@@ -583,20 +589,10 @@ function renderSettings() {
       <hr class="sep">
       ${Native.LN ? `<div><div class="sec-title" style="margin-top:0"><span>Bildirim durumu</span></div>${nativeStatusHTML()}</div><hr class="sep">` : ''}
       <div class="switch"><span>Namaz bildirimleri<br><span class="hint">Durum: ${perm}</span></span><input type="checkbox" id="setNotify" ${s.notify ? 'checked' : ''}></div>
-      <div>
-        <div class="pn-grid">
-          <span class="pn-h"></span><span class="pn-h">Ezandan önce<br><small>“Ezana X dk kaldı”</small></span><span class="pn-h">Vakit çıkmadan<br><small>“Kıldın mı?”</small></span>
-          ${PRAYERS.map((p, i) => {
-            const pn = s.pn[i] || { pre: 0, end: 0 };
-            return `<span class="pn-name">${p.name}</span>
-              <select class="field" data-pn="${i}" data-pf="pre">${opt(MINS, pn.pre, v => v ? `${v} dk önce` : 'Kapalı')}</select>
-              <select class="field" data-pn="${i}" data-pf="end">${opt(MINS, pn.end, v => v ? `${v} dk kala` : 'Kapalı')}</select>`;
-          }).join('')}
-          <span class="pn-name all">Hepsi</span>
-          <select class="field" data-pn="all" data-pf="pre"><option value="">Hepsine uygula…</option>${opt(MINS, -1, v => v ? `${v} dk önce` : 'Kapalı')}</select>
-          <select class="field" data-pn="all" data-pf="end"><option value="">Hepsine uygula…</option>${opt(MINS, -1, v => v ? `${v} dk kala` : 'Kapalı')}</select>
-        </div>
-        <p class="hint" style="margin:6px 0 0">“Kıldın mı?” sorusu namazın vakti çıkmadan önce gelir: Sabah → güneş doğuşu, Öğle → İkindi, İkindi → Akşam, Akşam → Yatsı, Yatsı → İmsak. Kıldığın namaz için bildirim gelmez.</p>
+      <div class="pn-list">
+        ${PRAYERS.map((p, i) => pnCardHTML(i)).join('')}
+        ${pnCardHTML('all')}
+        <p class="hint" style="margin:0">“Kıldın mı?” üç şekilde sorulabilir: ezan okunduktan X dk sonra (ör. sabahın 30. dakikası), vakit çıkmadan (sonraki ezandan) X dk önce ya da istediğin bir saatte (ör. Yatsı için 23:00). Kıldığın namaz için soru gelmez.</p>
       </div>
       <div class="switch"><span>Opsiyonel hedef hatırlatmaları<br><span class="hint">Saatleri “Opsiyonel hedefler”den ayarlanır</span></span><input type="checkbox" id="setHabitNotify" ${s.habitNotify ? 'checked' : ''}></div>
       <div class="form-row">
@@ -619,6 +615,44 @@ function renderSettings() {
         <span class="hint">${codeVersionText()}</span>
       </div>
       <p class="hint" style="margin:0">Uygulama her açılışta yeni sürümü kendisi indirir; yeni APK gerekmez.</p>` : ''}
+    </div>`;
+}
+
+const PRE_MINS = [0, 5, 10, 15, 20, 30, 45, 60];
+const ASK_MINS = [5, 10, 15, 20, 30, 45, 60, 90, 120, 150, 180];
+function pnCardHTML(i) {
+  const all = i === 'all';
+  const pn = all ? { pre: -1, ask: '', askMin: -1, askTime: '' } : (state.settings.pn[i] || {});
+  const opt = (vals, cur, label) => vals.map(v => `<option value="${v}" ${String(cur) === String(v) ? 'selected' : ''}>${label(v)}</option>`).join('');
+  const ph = all ? '<option value="">Hepsine uygula…</option>' : '';
+  let preview = '';
+  if (!all) {
+    const today = new Date();
+    const t = Times.get(today);
+    const q = askFor(today, i, t);
+    const pre = Number(pn.pre) ? new Date(atTime(today, t[PRAYERS[i].t]) - pn.pre * 60000) : null;
+    const f = d => `${d.getDate() !== today.getDate() ? 'ertesi gün ' : ''}${hhmm(d.getHours() * 60 + d.getMinutes())}`;
+    const parts = [];
+    if (pre) parts.push(`hatırlatma ${f(pre)}`);
+    if (q) parts.push(`soru ${f(q.at)}`);
+    preview = `<div class="pn-prev">Bugün: ezan ${t[PRAYERS[i].t]}${parts.length ? ' · ' + parts.join(' · ') : ' · bildirim yok'}</div>`;
+  }
+  const askSel = `<select class="field" data-pn="${i}" data-pf="ask">${ph}
+      ${opt(['off', 'after', 'end', 'clock'], pn.ask, v => ({ off: 'Sorma', after: 'Ezandan sonra…', end: 'Vakit çıkmadan…', clock: 'Belirli saatte…' })[v])}</select>`;
+  let askVal = '';
+  if (all || pn.ask === 'after' || pn.ask === 'end') {
+    const suffix = all ? 'dk' : pn.ask === 'after' ? 'dk sonra' : `dk önce (${PRAYER_END[i].label.replace(/ (ezanına|doğuşuna|vaktine)$/, '')})`;
+    askVal = `<select class="field" data-pn="${i}" data-pf="askMin">${ph}${opt(ASK_MINS, pn.askMin, v => `${v} ${suffix}`)}</select>`;
+  } else if (pn.ask === 'clock') {
+    askVal = `<input class="field" type="time" data-pn="${i}" data-pf="askTime" value="${esc(pn.askTime || '')}">`;
+  }
+  return `
+    <div class="pn-card ${all ? 'all' : ''}">
+      <div class="pn-name">${all ? 'Hepsine birden' : PRAYERS[i].name}</div>
+      <div class="pn-row"><span>Ezandan önce</span>
+        <select class="field" data-pn="${i}" data-pf="pre">${ph}${opt(PRE_MINS, pn.pre, v => v ? `${v} dk önce` : 'Hatırlatma yok')}</select></div>
+      <div class="pn-row ask"><span>“Kıldın mı?” sorusu</span><div class="pn-ask">${askSel}${askVal}</div></div>
+      ${preview}
     </div>`;
 }
 
@@ -665,7 +699,7 @@ function remindersFor(date, dayIndex, now) {
     PRAYERS.forEach((p, i) => {
       if (day && day.p[i]) return; // kılındıysa hiç hatırlatma yok
       const vakit = atTime(date, t[p.t]);
-      const pn = s.pn[i] || { pre: 0, end: 0 };
+      const pn = s.pn[i] || { pre: 0, ask: 'off' };
       if (Number(pn.pre)) {
         out.push({
           id: dayIndex * 100 + i * 2 + 1,
@@ -675,21 +709,16 @@ function remindersFor(date, dayIndex, now) {
           pre: i,
         });
       }
-      if (Number(pn.end)) {
-        const e = PRAYER_END[i];
-        const endDate = e.nextDay ? addDays(date, 1) : date;
-        const endStr = (e.nextDay ? Times.get(endDate) : t)[e.t];
-        const at = new Date(atTime(endDate, endStr) - Number(pn.end) * 60000);
-        if (at > vakit) {
-          out.push({
-            id: dayIndex * 100 + i * 2 + 2,
-            at,
-            title: `${p.name} namazını kıldın mı?`,
-            body: `${e.label} ${pn.end} dk kaldı (${endStr}). Kıldıysan işaretle ✅`,
-            action: 'PRAYER_CHECK',
-            extra: { key, kind: 'p', id: String(i), label: `${p.name} namazı` },
-          });
-        }
+      const q = askFor(date, i, t);
+      if (q) {
+        out.push({
+          id: dayIndex * 100 + i * 2 + 2,
+          at: q.at,
+          title: `${p.name} namazını kıldın mı?`,
+          body: q.body,
+          action: 'PRAYER_CHECK',
+          extra: { key, kind: 'p', id: String(i), label: `${p.name} namazı` },
+        });
       }
     });
     // Aynı dakikaya düşen "X ezanına kaldı" ile önceki namazın "kıldın mı?" sorusunu tek bildirimde birleştir
@@ -865,6 +894,33 @@ async function nativeExactCheck(open) {
   } catch (e) { /* yok say */ }
 }
 
+/* ---------- "Kıldın mı?" zamanı ---------- */
+// Bir gün ve namaz için sorunun saati ve açıklaması (kapalıysa null)
+function askFor(date, i, t) {
+  const pn = state.settings.pn[i] || {};
+  const p = PRAYERS[i];
+  t = t || Times.get(date);
+  const vakit = atTime(date, t[p.t]);
+  const min = Number(pn.askMin) || 0;
+  if (pn.ask === 'after' && min) {
+    return { at: new Date(vakit.getTime() + min * 60000), body: `${p.name} vakti girdi (${t[p.t]}), ${min} dk geçti. Kıldıysan işaretle ✅` };
+  }
+  if (pn.ask === 'end' && min) {
+    const e = PRAYER_END[i];
+    const endDate = e.nextDay ? addDays(date, 1) : date;
+    const endStr = (e.nextDay ? Times.get(endDate) : t)[e.t];
+    const at = new Date(atTime(endDate, endStr) - min * 60000);
+    if (at <= vakit) return null;
+    return { at, body: `${e.label} ${min} dk kaldı (${endStr}). Kıldıysan işaretle ✅` };
+  }
+  if (pn.ask === 'clock' && /^\d\d:\d\d$/.test(pn.askTime || '')) {
+    let at = atTime(date, pn.askTime);
+    if (at <= vakit) at = atTime(addDays(date, 1), pn.askTime); // vakitten önceki saat → gece yarısından sonra
+    return { at, body: `${p.name} vakti girdi (${t[p.t]}). Kıldıysan işaretle ✅` };
+  }
+  return null;
+}
+
 /* ---------- Telefon bildirim durumu (teşhis) ---------- */
 ui.nstatus = null;
 async function refreshNativeStatus() {
@@ -1007,12 +1063,20 @@ document.addEventListener('change', e => {
   }
   if (t.dataset.pn) {
     const f = t.dataset.pf;
-    if (t.value === '') return;
-    const v = Number(t.value);
-    if (t.dataset.pn === 'all') state.settings.pn.forEach(x => { x[f] = v; });
-    else state.settings.pn[Number(t.dataset.pn)][f] = v;
+    if (t.value === '' && f !== 'askTime') return;
+    const v = (f === 'pre' || f === 'askMin') ? Number(t.value) : t.value;
+    const targets = t.dataset.pn === 'all' ? state.settings.pn : [state.settings.pn[Number(t.dataset.pn)]];
+    targets.forEach(x => {
+      x[f] = v;
+      if (f === 'ask' && v === 'clock' && !x.askTime) x.askTime = '23:00';
+      if (f === 'ask' && (v === 'after' || v === 'end') && !Number(x.askMin)) x.askMin = 30;
+    });
     save(); scheduleNotifications();
-    if (t.dataset.pn === 'all') { renderSheet(); toast('Tüm namazlara uygulandı ✅'); }
+    const sheet = document.getElementById('settingsSheet');
+    const y = sheet.scrollTop;
+    renderSheet();
+    sheet.scrollTop = y;
+    if (t.dataset.pn === 'all') toast('Tüm namazlara uygulandı ✅');
     return;
   }
   if (t.dataset.habit) {
