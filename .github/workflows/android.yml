@@ -1,9 +1,16 @@
 name: Android APK
 
-# main dalına her gönderimde APK derlenir ve Releases sayfasına eklenir.
+# APK yalnızca Android tarafı değişince derlenir. Arayüz değişiklikleri (app.js, styles.css,
+# index.html) telefona loader.js üzerinden otomatik gelir, yeni APK gerekmez.
 on:
   push:
     branches: [main]
+    paths:
+      - "android-setup/**"
+      - "loader.js"
+      - "package.json"
+      - "capacitor.config.json"
+      - ".github/workflows/android.yml"
   workflow_dispatch:
 
 permissions:
