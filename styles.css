@@ -319,3 +319,4 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 4px 0; }
 .pn-row.ask { grid-template-columns: 1fr; gap: 4px; }
 .pn-row.ask .pn-ask { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .pn-row.ask .pn-ask .field:only-child { grid-column: 1 / -1; }
+.pn-row.ask .pn-ask { grid-template-columns: 1fr; }
