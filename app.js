@@ -601,6 +601,12 @@ function renderSettings() {
         <label class="pill-btn" style="display:inline-block;font-weight:400">⬆️ Yedek yükle<input type="file" accept=".json,.txt,application/json,text/plain" id="importFile" hidden></label>
       </div>
       <p class="hint" style="margin:0">Veriler sadece bu cihazda saklanır. Ara sıra yedek almanı öneririm.</p>
+      ${Native.isNative ? `<hr class="sep">
+      <div class="form-row">
+        <button class="pill-btn" data-act="check-update">🔄 Güncellemeleri denetle</button>
+        <span class="hint">${codeVersionText()}</span>
+      </div>
+      <p class="hint" style="margin:0">Uygulama her açılışta yeni sürümü kendisi indirir; yeni APK gerekmez.</p>` : ''}
     </div>`;
 }
 
@@ -888,6 +894,16 @@ function nativeStatusHTML() {
     <p class="hint" style="margin:6px 0 0">${esc(brandHint(st.manufacturer))}</p>`;
 }
 
+/* ---------- Kod sürümü (otomatik güncelleme) ---------- */
+function codeVersionText() {
+  const c = window.__codeInfo || {};
+  if (c.source === 'github' && c.sha) {
+    const d = new Date(c.at);
+    return `Sürüm ${c.sha.slice(0, 7)} · ${d.getDate()} ${MONTHS[d.getMonth()]} ${hhmm(d.getHours() * 60 + d.getMinutes())}`;
+  }
+  return 'APK içindeki sürüm';
+}
+
 /* ---------- Opsiyonel hedef yönetimi ---------- */
 function addHabit(name, time) {
   name = String(name || '').trim().slice(0, 40);
@@ -935,6 +951,13 @@ document.addEventListener('click', e => {
     case 'geo': useLocation(); break;
     case 'exact': nativeExactCheck(true); break;
     case 'fix-perm': enableNotifications(); break;
+    case 'check-update':
+      if (typeof window.__checkUpdate !== 'function') { toast('Güncelleme yalnızca telefon uygulamasında.'); break; }
+      toast('Denetleniyor…');
+      window.__checkUpdate(true)
+        .then(r => { if (r === 'guncel') toast('En güncel sürümü kullanıyorsun ✅'); })
+        .catch(() => toast('Güncelleme denetlenemedi — internet bağlantını kontrol et.'));
+      break;
     case 'battery': if (Native.Bat) Native.Bat.request().catch(() => {}); break;
     case 'autostart': if (Native.Bat) Native.Bat.openAutostart().catch(() => {}); break;
     case 'open-settings': ui.sheet = 'settings'; renderSheet(); refreshNativeStatus(); break;
@@ -1114,6 +1137,7 @@ if (!Native.isNative && 'serviceWorker' in navigator && /^https?:$/.test(locatio
 }
 
 initNativeActions();
+window.__appBooted = true; // yükleyici: kod sorunsuz açıldı
 renderAll();
 renderWidget();
 scheduleNotifications();

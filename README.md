@@ -27,6 +27,8 @@ Tüm veriler tarayıcının `localStorage`'ında, yani sadece kullandığın cih
 2. Kurarken “Bilinmeyen kaynaklardan yükleme” izni istenirse ver.
 3. İlk açılışta Ayarlar → Namaz vakti bildirimleri'ni aç, izin ver; ardından **⏰ Tam zamanında bildirim** iznini aç.
 
+**Otomatik güncelleme:** APK her açılışta GitHub'daki en son `app.js`, `styles.css` ve `index.html`'i indirir (`loader.js`). Arayüz ve özellik değişiklikleri için yeni APK gerekmez; yalnızca Android tarafı (izinler, yerel eklentiler) değişirse yeni APK kurulur. İndirilen sürüm açılmazsa APK içindeki sürüme dönülür.
+
 APK'da bildirimler uygulama kapalıyken de gelir (önümüzdeki 7 gün her açılışta yeniden kurulur).
 Yeni sürümler hep aynı anahtarla imzalandığı için eskisinin üzerine kurulur, veriler silinmez.
 

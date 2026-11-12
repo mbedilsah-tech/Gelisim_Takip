@@ -28,7 +28,7 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           mkdir -p www
-          cp -r index.html styles.css app.js manifest.webmanifest icons www/
+          cp -r index.html styles.css app.js loader.js manifest.webmanifest icons www/
           npx cap add android
           bash android-setup/patch.sh
           npx cap sync android
