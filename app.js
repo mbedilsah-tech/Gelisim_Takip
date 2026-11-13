@@ -84,6 +84,7 @@ function defaultState() {
       pre: 30,        // (eski genel ayar; geçiş için tutuluyor)
       check: 15,      // vakitten kaç dk sonra "kıldın mı?" (0 = kapalı)
       habitNotify: true,
+      theme: 'light', // 'light' | 'dark' | 'system'
     },
   };
 }
@@ -579,6 +580,13 @@ function renderSettings() {
   document.getElementById('settingsSheet').innerHTML = `
     <div class="sheet-head"><h2>Ayarlar</h2><button class="icon-btn" data-act="close" aria-label="Kapat">×</button></div>
     <div class="form-grid">
+      <label>Tema
+        <span class="tabs theme-pick">
+          ${[['light', '☀️ Açık'], ['dark', '🌙 Koyu'], ['system', '📱 Sistem']].map(([v, l]) =>
+            `<button type="button" class="${(s.theme || 'light') === v ? 'on' : ''}" data-act="theme" data-v="${v}">${l}</button>`).join('')}
+        </span>
+      </label>
+      <hr class="sep">
       <label>Şehir (namaz vakitleri)
         <select class="field" id="setCity">
           ${CITIES.map(c => `<option ${c[0] === s.city ? 'selected' : ''}>${c[0]}</option>`).join('')}
@@ -683,6 +691,21 @@ function renderAll() {
   renderStats();
   if (ui.openDay) renderDayModal();
 }
+
+/* ---------- Tema ---------- */
+const darkQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+function applyTheme() {
+  const pref = state.settings.theme || 'light';
+  const dark = pref === 'dark' || (pref === 'system' && darkQuery && darkQuery.matches);
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', dark ? '#11161a' : '#1f6b52');
+}
+if (darkQuery) {
+  const onSys = () => { if (state.settings.theme === 'system') applyTheme(); };
+  if (darkQuery.addEventListener) darkQuery.addEventListener('change', onSys); else if (darkQuery.addListener) darkQuery.addListener(onSys);
+}
+applyTheme();
 
 /* ---------- Bildirimler ---------- */
 let swReg = null;
@@ -1067,6 +1090,7 @@ document.addEventListener('click', e => {
     case 'geo': useLocation(); break;
     case 'exact': nativeExactCheck(true); break;
     case 'fix-perm': enableNotifications(); break;
+    case 'theme': state.settings.theme = el.dataset.v; save(); applyTheme(); renderSheet(); break;
     case 'check-update':
       if (typeof window.__checkUpdate !== 'function') { toast('Güncelleme yalnızca telefon uygulamasında.'); break; }
       toast('Denetleniyor…');
