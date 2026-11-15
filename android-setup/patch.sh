@@ -22,7 +22,13 @@ RECV='        <receiver android:name=".GelisimWidget" android:exported="false" a
 sed -i "s#</application>#${RECV}    </application>#" "$MAN"
 echo "--- Widget:"; grep -n "GelisimWidget" "$MAN"
 
-# 5) Sürüm numarası: her derlemede artar, telefon güncelleme olarak kurar
+# 5) Sabit imza: her derleme repodaki aynı anahtarla imzalanır, yeni sürüm eskisinin üzerine kurulur.
+#    (Gradle ~/.android/debug.keystore'u her zaman kullanmadığı için açıkça belirtiyoruz.)
+SIGN='    signingConfigs {\n        debug {\n            storeFile file("../../android-setup/debug.keystore")\n            storePassword "android"\n            keyAlias "androiddebugkey"\n            keyPassword "android"\n        }\n    }'
+sed -i "0,/^android {/s##android {\n${SIGN}#" $APP/build.gradle
+echo "--- İmza:"; grep -n -A3 "signingConfigs" $APP/build.gradle
+
+# 6) Sürüm numarası: her derlemede artar, telefon güncelleme olarak kurar
 N=${GITHUB_RUN_NUMBER:-1}
 sed -i -E "s/versionCode [0-9]+/versionCode ${N}/; s/versionName \"[^\"]*\"/versionName \"1.0.${N}\"/" $APP/build.gradle
 

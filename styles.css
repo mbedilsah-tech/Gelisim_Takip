@@ -342,3 +342,7 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 4px 0; }
 :root[data-theme="dark"] .cell.lvl-0:not(.future) { background: var(--card); }
 .theme-pick { display: flex; }
 .theme-pick button { flex: 1; }
+
+/* ---------- Yedek ---------- */
+.steps { margin: 0 0 10px; padding-left: 20px; font-size: 14px; line-height: 1.5; }
+.backup-text { min-height: 120px; font-family: ui-monospace, Menlo, monospace; font-size: 11px; word-break: break-all; }

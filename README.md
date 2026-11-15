@@ -16,7 +16,7 @@ Günlük 5 vakit namaz, opsiyonel günlük hedefler (spor vb.), kişisel program
 - **Özet:** Aylık tam gün sayısı, üst üste tam gün serisi, namaz yüzdesi, spor seti sayısı.
 - **Ana ekran widget'ları (APK):** 4×2, 4×1 (kompakt) ve 3×1 (mini); şehir, sıradaki vakit ve geri sayım, bugünün 5 vakti (dokununca işaretlenir), yıldızlar.
 - **Tema:** Ayarlar → Açık / Koyu / Sistem.
-- **Yedek:** Ayarlar → Yedeği indir / Yedek yükle (JSON).
+- **Yedek:** Ayarlar → Yedek al (metin olarak kopyalanır) / Yedeği geri yükle (metni yapıştır ya da dosya seç).
 
 Tüm veriler tarayıcının `localStorage`'ında, yani sadece kullandığın cihazda durur.
 

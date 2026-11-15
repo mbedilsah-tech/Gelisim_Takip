@@ -617,10 +617,10 @@ function renderSettings() {
         : 'Bildirimler uygulama açıkken ya da arka planda açık dururken gelir. Kapalıyken bildirim için Android uygulamasını kullan.'}</p>
       <hr class="sep">
       <div class="form-row">
-        <button class="pill-btn" data-act="export">⬇️ Yedeği ${Native.isNative ? 'kopyala' : 'indir'}</button>
-        <label class="pill-btn" style="display:inline-block;font-weight:400">⬆️ Yedek yükle<input type="file" accept=".json,.txt,application/json,text/plain" id="importFile" hidden></label>
+        <button class="pill-btn" data-act="open-backup">📋 Yedek al</button>
+        <button class="pill-btn" data-act="open-restore">♻️ Yedeği geri yükle</button>
       </div>
-      <p class="hint" style="margin:0">Veriler sadece bu cihazda saklanır. Ara sıra yedek almanı öneririm.</p>
+      <p class="hint" style="margin:0">Veriler sadece bu cihazda saklanır. Yedek bir metin olarak kopyalanır; onu kendine mesaj ya da not olarak kaydet, geri yüklerken yapıştır.</p>
       ${Native.isNative ? `<hr class="sep">
       <div class="form-row">
         <button class="pill-btn" data-act="check-update">🔄 Güncellemeleri denetle</button>
@@ -677,10 +677,71 @@ function pnCardHTML(i) {
     </div>`;
 }
 
+/* ---------- Yedek al / geri yükle ---------- */
+function renderBackup() {
+  const txt = JSON.stringify(state);
+  const days = Object.keys(state.days).length;
+  document.getElementById('settingsSheet').innerHTML = `
+    <div class="sheet-head">
+      <div><h2>Yedek al</h2><div class="muted">${days} günlük kayıt, hedefler ve ayarlar</div></div>
+      <button class="icon-btn" data-act="back-settings" aria-label="Geri">‹</button>
+    </div>
+    <ol class="steps">
+      <li><b>Kopyala</b>'ya bas.</li>
+      <li>Kopyalanan metni kendine WhatsApp'tan gönder ya da Notlar'a / Keep'e yapıştır.</li>
+      <li>Geri yüklerken: Ayarlar → <b>Yedeği geri yükle</b> → metni yapıştır.</li>
+    </ol>
+    <textarea class="field backup-text" id="backupText" readonly>${esc(txt)}</textarea>
+    <div class="form-row" style="margin-top:10px">
+      <button class="pill-btn primary" data-act="backup-copy">📋 Kopyala</button>
+      ${Native.isNative ? '' : '<button class="pill-btn" data-act="export">⬇️ Dosya olarak indir</button>'}
+    </div>`;
+}
+
+function renderRestore() {
+  document.getElementById('settingsSheet').innerHTML = `
+    <div class="sheet-head">
+      <div><h2>Yedeği geri yükle</h2><div class="muted">Bu cihazdaki kayıtların yerine yedektekiler geçer.</div></div>
+      <button class="icon-btn" data-act="back-settings" aria-label="Geri">‹</button>
+    </div>
+    <ol class="steps">
+      <li>Kaydettiğin yedek metnini (mesaj ya da not) aç, tamamını kopyala.</li>
+      <li>Aşağıdaki kutuya basılı tut → <b>Yapıştır</b>.</li>
+      <li><b>Geri yükle</b>'ye bas.</li>
+    </ol>
+    <textarea class="field backup-text" id="restoreText" placeholder='{"version":2,"days":{…}} ile başlayan yedek metni buraya yapıştır'></textarea>
+    <div class="form-row" style="margin-top:10px">
+      <button class="pill-btn primary" data-act="restore-apply">♻️ Geri yükle</button>
+      <label class="pill-btn" style="display:inline-block;font-weight:400">📄 Dosyadan seç<input type="file" accept=".json,.txt,application/json,text/plain" id="importFile" hidden></label>
+    </div>`;
+}
+
+function applyBackupText(txt) {
+  try {
+    const raw = String(txt || '').trim();
+    const a = raw.indexOf('{'), b = raw.lastIndexOf('}');
+    if (a < 0 || b <= a) throw new Error('boş');
+    const s = JSON.parse(raw.slice(a, b + 1));
+    if (!s || typeof s.days !== 'object') throw new Error('geçersiz');
+    store.set(STORE_KEY, JSON.stringify(s));
+    state = loadState();
+    save(); applyTheme(); renderAll(); scheduleNotifications(); pushWidget();
+    ui.sheet = null; renderSheet();
+    toast(`Yedek yüklendi ✅ (${Object.keys(state.days).length} gün)`);
+    return true;
+  } catch (e) {
+    toast('Bu metin geçerli bir yedek değil. Metnin tamamını kopyaladığından emin ol.');
+    return false;
+  }
+}
+
 function renderSheet() {
   const modal = document.getElementById('settingsModal');
   if (!ui.sheet) { modal.hidden = true; return; }
-  if (ui.sheet === 'habits') renderHabits(); else renderSettings();
+  if (ui.sheet === 'habits') renderHabits();
+  else if (ui.sheet === 'backup') renderBackup();
+  else if (ui.sheet === 'restore') renderRestore();
+  else renderSettings();
   modal.hidden = false;
 }
 
@@ -1152,6 +1213,21 @@ document.addEventListener('click', e => {
       break;
     case 'test-notify': notify('Deneme', 'Bildirimler çalışıyor 🎉', 'test'); break;
     case 'export': exportData(); break;
+    case 'open-backup': ui.sheet = 'backup'; renderSheet(); break;
+    case 'open-restore': ui.sheet = 'restore'; renderSheet(); break;
+    case 'back-settings': ui.sheet = 'settings'; renderSheet(); break;
+    case 'restore-apply': applyBackupText((document.getElementById('restoreText') || {}).value); break;
+    case 'backup-copy': {
+      const ta = document.getElementById('backupText');
+      const done = () => toast('Yedek kopyalandı 📋 Şimdi kendine mesaj ya da not olarak kaydet.');
+      const fallback = () => {
+        try { ta.removeAttribute('readonly'); ta.focus(); ta.select(); ta.setSelectionRange(0, ta.value.length); document.execCommand('copy'); ta.setAttribute('readonly', ''); done(); }
+        catch (e) { toast('Kopyalanamadı — kutudaki metni basılı tutup “Tümünü seç → Kopyala” yap.'); }
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(done, fallback);
+      else fallback();
+      break;
+    }
   }
 });
 
@@ -1287,16 +1363,7 @@ function exportData() {
 function importData(file) {
   if (!file) return;
   const r = new FileReader();
-  r.onload = () => {
-    try {
-      const s = JSON.parse(r.result);
-      if (!s || typeof s.days !== 'object') throw new Error('geçersiz');
-      store.set(STORE_KEY, JSON.stringify(s));
-      state = loadState();
-      save(); renderAll(); renderSheet(); scheduleNotifications();
-      toast('Yedek yüklendi ✅');
-    } catch (e) { toast('Bu dosya geçerli bir yedek değil.'); }
-  };
+  r.onload = () => applyBackupText(r.result);
   r.readAsText(file);
 }
 
