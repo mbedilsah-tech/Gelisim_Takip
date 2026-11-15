@@ -14,7 +14,7 @@ Günlük 5 vakit namaz, opsiyonel günlük hedefler (spor vb.), kişisel program
 - **Bildirimler:** Her namaz için ayrı ayrı: ezandan önce “Ezana X dk kaldı” , “Namazı kıldın mı?” sorusu (o namazın ezanından X dk sonra, sonraki ezandan X dk önce ya da belirli bir saatte) ve kılınmadıysa vakit çıkmadan son hatırlatma (her biri açılıp kapatılabilir, süreler seçilebilir; telefonda “Kıldım ✅” düğmesiyle işaretlenir). Kılınan namaz için soru gelmez.
 - **Hedefler:** Haftalık (“Mülk suresini oku”) ve aylık (“Bir kitap bitir”) hedef listeleri.
 - **Özet:** Aylık tam gün sayısı, üst üste tam gün serisi, namaz yüzdesi, spor seti sayısı.
-- **Ana ekran widget'ı (APK):** sıradaki vakit ve geri sayım, bugünün 5 vakti (dokununca işaretlenir), yıldızlar.
+- **Ana ekran widget'ları (APK):** 4×2, 4×1 (kompakt) ve 3×1 (mini); şehir, sıradaki vakit ve geri sayım, bugünün 5 vakti (dokununca işaretlenir), yıldızlar.
 - **Tema:** Ayarlar → Açık / Koyu / Sistem.
 - **Yedek:** Ayarlar → Yedeği indir / Yedek yükle (JSON).
 

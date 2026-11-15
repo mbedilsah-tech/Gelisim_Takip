@@ -1056,7 +1056,7 @@ function pushWidget() {
         stars: starCount(key),
       };
     }
-    const data = { days, theme: document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light' };
+    const data = { days, city: state.settings.city || '', theme: document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light' };
     Native.Widget.update({ data: JSON.stringify(data) }).catch(() => {});
   }, 300);
 }

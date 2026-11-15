@@ -20,7 +20,10 @@ import java.util.Calendar;
 import java.util.Locale;
 
 /**
- * Ana ekran widget'ı: sıradaki vakit + geri sayım, bugünün 5 vakti (dokununca işaretlenir), yıldızlar.
+ * Ana ekran widget'ları (üç boyut):
+ *   GelisimWidget         4×2  şehir, sıradaki vakit + geri sayım, 5 vakit (dokununca işaretlenir), yıldızlar
+ *   GelisimWidgetCompact  4×1  şehir, sıradaki vakit + geri sayım, 5 vakit (baş harfleri, dokununca işaretlenir)
+ *   GelisimWidgetMini     3×1  şehir, sıradaki vakit + geri sayım, kılınan vakit sayısı ve yıldızlar
  * Veriyi uygulama (WidgetPlugin) SharedPreferences'a yazar; widget'ta yapılan işaretler
  * "pending" listesine eklenir ve uygulama açılınca kendi kayıtlarına aktarılır.
  */
@@ -33,9 +36,15 @@ public class GelisimWidget extends AppWidgetProvider {
     static final String[] KEYS = {"imsak", "gunes", "ogle", "ikindi", "aksam", "yatsi"};
     static final String[] LABELS = {"İmsak", "Güneş", "Öğle", "İkindi", "Akşam", "Yatsı"};
     static final String[] PRAYER_NAMES = {"Sabah", "Öğle", "İkindi", "Akşam", "Yatsı"};
+    static final String[] PRAYER_INITIALS = {"S", "Ö", "İ", "A", "Y"};
     static final String[] PRAYER_KEYS = {"imsak", "ogle", "ikindi", "aksam", "yatsi"};
     static final int[] PILL_IDS = {R.id.p0, R.id.p1, R.id.p2, R.id.p3, R.id.p4};
     static final int[] LEVEL_COLORS = {0x00000000, 0xFFC9EFC4, 0xFF2F9A5C, 0xFFA9D3F7, 0xFF2563B8, 0xFF7A3FC4};
+
+    // Boyutlar
+    static final int KIND_LARGE = 0, KIND_COMPACT = 1, KIND_MINI = 2;
+    static final Class<?>[] CLASSES = {GelisimWidget.class, GelisimWidgetCompact.class, GelisimWidgetMini.class};
+    static final int[] LAYOUTS = {R.layout.widget_gelisim, R.layout.widget_compact, R.layout.widget_mini};
 
     @Override
     public void onUpdate(Context context, AppWidgetManager manager, int[] ids) {
@@ -100,27 +109,33 @@ public class GelisimWidget extends AppWidgetProvider {
 
     static void refreshAll(Context ctx) {
         AppWidgetManager mgr = AppWidgetManager.getInstance(ctx);
-        int[] ids = mgr.getAppWidgetIds(new ComponentName(ctx, GelisimWidget.class));
-        if (ids == null || ids.length == 0) return;
         long nextChange = 0;
-        RemoteViews views = new RemoteViews(ctx.getPackageName(), R.layout.widget_gelisim);
-        try {
-            nextChange = build(ctx, views);
-        } catch (Exception e) {
-            views.setTextViewText(R.id.next_label, "Uygulamayı bir kez aç");
+        for (int kind = 0; kind < CLASSES.length; kind++) {
+            int[] ids = mgr.getAppWidgetIds(new ComponentName(ctx, CLASSES[kind]));
+            if (ids == null || ids.length == 0) continue;
+            RemoteViews views = new RemoteViews(ctx.getPackageName(), LAYOUTS[kind]);
+            try {
+                nextChange = build(ctx, views, kind);
+            } catch (Exception e) {
+                views.setTextViewText(R.id.next_label, "Uygulamayı bir kez aç");
+            }
+            for (int id : ids) mgr.updateAppWidget(id, views);
         }
-        for (int id : ids) mgr.updateAppWidget(id, views);
         schedule(ctx, nextChange);
     }
 
     /** Görünümü doldurur; bir sonraki yenileme zamanını (ms) döner. */
-    static long build(Context ctx, RemoteViews v) throws Exception {
-        // Başlığa dokununca uygulama açılsın
+    static long build(Context ctx, RemoteViews v, int kind) throws Exception {
+        boolean hasPills = kind != KIND_MINI;
+        boolean hasSummary = kind != KIND_COMPACT;
+
+        // Dokununca uygulama açılsın (mini'de her yer, diğerlerinde başlık/özet)
         Intent open = new Intent(ctx, MainActivity.class);
         open.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         PendingIntent openPi = PendingIntent.getActivity(ctx, 0, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        v.setOnClickPendingIntent(R.id.header, openPi);
-        v.setOnClickPendingIntent(R.id.summary, openPi);
+        if (kind == KIND_MINI) v.setOnClickPendingIntent(R.id.root, openPi);
+        else v.setOnClickPendingIntent(R.id.header, openPi);
+        if (hasSummary) v.setOnClickPendingIntent(R.id.summary, openPi);
 
         Calendar now = Calendar.getInstance();
         Calendar midnight = (Calendar) now.clone();
@@ -136,20 +151,26 @@ public class GelisimWidget extends AppWidgetProvider {
         v.setInt(R.id.root, "setBackgroundResource", dark ? R.drawable.widget_bg_dark : R.drawable.widget_bg_light);
         v.setTextColor(R.id.next_label, ink);
         v.setTextColor(R.id.countdown, ink);
-        v.setTextColor(R.id.summary, muted);
+        v.setTextColor(R.id.city, muted);
+        if (hasSummary) v.setTextColor(R.id.summary, kind == KIND_MINI ? ink : muted);
+
+        String city = data == null ? "" : data.optString("city", "");
+        v.setTextViewText(R.id.city, city.isEmpty() ? "Gelişim Takip" : city);
 
         String todayKey = dayKey(now);
         JSONObject days = data == null ? null : data.optJSONObject("days");
         JSONObject today = days == null ? null : days.optJSONObject(todayKey);
         if (today == null) {
             v.setChronometer(R.id.countdown, SystemClock.elapsedRealtime(), null, false);
-            v.setTextViewText(R.id.next_label, "Güncel bilgi için uygulamayı aç");
+            v.setTextViewText(R.id.next_label, "Uygulamayı aç");
             v.setTextViewText(R.id.countdown, "");
-            v.setTextViewText(R.id.summary, "Gelişim Takip");
-            for (int i = 0; i < 5; i++) {
-                v.setTextViewText(PILL_IDS[i], PRAYER_NAMES[i]);
-                v.setInt(PILL_IDS[i], "setBackgroundResource", dark ? R.drawable.pill_off_dark : R.drawable.pill_off_light);
-                v.setTextColor(PILL_IDS[i], ink);
+            if (hasSummary) v.setTextViewText(R.id.summary, "");
+            if (hasPills) {
+                for (int i = 0; i < 5; i++) {
+                    v.setTextViewText(PILL_IDS[i], kind == KIND_LARGE ? PRAYER_NAMES[i] : PRAYER_INITIALS[i]);
+                    v.setInt(PILL_IDS[i], "setBackgroundResource", dark ? R.drawable.pill_off_dark : R.drawable.pill_off_light);
+                    v.setTextColor(PILL_IDS[i], ink);
+                }
             }
             return midnight.getTimeInMillis();
         }
@@ -173,7 +194,7 @@ public class GelisimWidget extends AppWidgetProvider {
             JSONObject td = days.optJSONObject(dayKey(tom));
             if (td != null) {
                 nextTime = td.getJSONObject("times").optString("imsak", null);
-                if (nextTime != null) { nextMs = timeAt(tom, nextTime); nextLabel = "İmsak (yarın)"; }
+                if (nextTime != null) { nextMs = timeAt(tom, nextTime); nextLabel = kind == KIND_LARGE ? "İmsak (yarın)" : "İmsak"; }
             }
         }
         if (nextLabel != null) {
@@ -188,17 +209,20 @@ public class GelisimWidget extends AppWidgetProvider {
             }
         } else {
             v.setChronometer(R.id.countdown, SystemClock.elapsedRealtime(), null, false);
-            v.setTextViewText(R.id.next_label, "Vakitler için uygulamayı aç");
+            v.setTextViewText(R.id.next_label, "Uygulamayı aç");
             v.setTextViewText(R.id.countdown, "");
         }
 
-        // 5 vakit: dokununca işaretle / kaldır
+        // 5 vakit
         int count = 0;
         for (int i = 0; i < 5; i++) {
             boolean done = p.optInt(i, 0) == 1;
             if (done) count++;
-            String t = times.optString(PRAYER_KEYS[i], "");
-            v.setTextViewText(PILL_IDS[i], (done ? "✓ " : "") + PRAYER_NAMES[i] + "\n" + t);
+            if (!hasPills) continue;
+            String label;
+            if (kind == KIND_LARGE) label = (done ? "✓ " : "") + PRAYER_NAMES[i] + "\n" + times.optString(PRAYER_KEYS[i], "");
+            else label = PRAYER_INITIALS[i];
+            v.setTextViewText(PILL_IDS[i], label);
             v.setInt(PILL_IDS[i], "setBackgroundResource",
                 done ? (dark ? R.drawable.pill_on_dark : R.drawable.pill_on_light) : (dark ? R.drawable.pill_off_dark : R.drawable.pill_off_light));
             v.setTextColor(PILL_IDS[i], done ? (dark ? 0xFF0C1A14 : 0xFFFFFFFF) : ink);
@@ -211,15 +235,13 @@ public class GelisimWidget extends AppWidgetProvider {
         }
 
         int stars = today.optInt("stars", 0);
-        StringBuilder sb = new StringBuilder();
-        sb.append(count).append("/5 vakit");
-        if (count == 5) sb.append(" 💜");
-        if (stars > 0) {
-            sb.append("   ");
-            if (stars <= 5) for (int s = 0; s < stars; s++) sb.append('★');
-            else sb.append("★×").append(stars);
+        String starText = stars <= 0 ? "" : stars <= 5 ? new String(new char[stars]).replace("\0", "★") : "★×" + stars;
+        if (kind == KIND_LARGE) {
+            String s = count + "/5 vakit" + (count == 5 ? " 💜" : "") + (starText.isEmpty() ? "" : "   " + starText);
+            v.setTextViewText(R.id.summary, s);
+        } else if (kind == KIND_MINI) {
+            v.setTextViewText(R.id.summary, count + "/5" + (starText.isEmpty() ? "" : "\n" + starText));
         }
-        v.setTextViewText(R.id.summary, sb.toString());
         v.setInt(R.id.level, "setBackgroundColor", LEVEL_COLORS[count]);
 
         long next = midnight.getTimeInMillis();
