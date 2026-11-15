@@ -281,6 +281,7 @@ const Times = {
 };
 
 function onTimesUpdated() {
+  pushWidget();
   renderWidget();
   renderToday();
   if (ui.openDay) renderDayModal();
@@ -684,6 +685,7 @@ function renderSheet() {
 }
 
 function renderAll() {
+  if (!widgetConsuming) pushWidget();
   renderHeader();
   renderCalendar();
   renderToday();
@@ -716,7 +718,7 @@ const Native = (() => {
   const C = window.Capacitor;
   const isNative = !!(C && typeof C.isNativePlatform === 'function' && C.isNativePlatform());
   const P = isNative && C.Plugins ? C.Plugins : {};
-  return { isNative, LN: P.LocalNotifications || null, Bat: P.Battery || null };
+  return { isNative, LN: P.LocalNotifications || null, Bat: P.Battery || null, Widget: P.HomeWidget || null };
 })();
 const CHANNEL = 'hatirlatma';
 const TEST_IDS = [9998, 9999]; // test bildirimleri yeniden planlamada silinmesin
@@ -1033,6 +1035,46 @@ function nativeStatusHTML() {
     <p class="hint" style="margin:6px 0 0">${esc(brandHint(st.manufacturer))}</p>`;
 }
 
+/* ---------- Ana ekran widget'ı ---------- */
+// Bugün ve yarının vakitleri + işaretleri widget'a gider; widget'ta yapılan işaretler geri alınır.
+let widgetTimer = null;
+function pushWidget() {
+  if (!Native.Widget) return;
+  clearTimeout(widgetTimer);
+  widgetTimer = setTimeout(() => {
+    const now = new Date();
+    const base = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const days = {};
+    for (let d = 0; d < 2; d++) {
+      const date = addDays(base, d);
+      const key = keyOf(date);
+      const t = Times.get(date);
+      const day = getDay(key);
+      days[key] = {
+        times: { imsak: t.imsak, gunes: t.gunes, ogle: t.ogle, ikindi: t.ikindi, aksam: t.aksam, yatsi: t.yatsi },
+        p: day ? day.p.map(x => (x ? 1 : 0)) : [0, 0, 0, 0, 0],
+        stars: starCount(key),
+      };
+    }
+    const data = { days, theme: document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light' };
+    Native.Widget.update({ data: JSON.stringify(data) }).catch(() => {});
+  }, 300);
+}
+
+let widgetConsuming = null;
+function consumeWidget() {
+  if (!Native.Widget) return Promise.resolve();
+  if (widgetConsuming) return widgetConsuming;
+  widgetConsuming = Native.Widget.consume().then(r => {
+    const items = (r && r.items) || [];
+    for (const it of items) {
+      if (it && it.date && it.i >= 0 && it.i <= 4) setItem(it.date, 'p', String(it.i), !!it.val);
+    }
+    if (items.length) { save(); renderAll(); scheduleNotifications(); }
+  }).catch(() => {}).then(() => { widgetConsuming = null; pushWidget(); });
+  return widgetConsuming;
+}
+
 /* ---------- Kod sürümü (otomatik güncelleme) ---------- */
 function codeVersionText() {
   const c = window.__codeInfo || {};
@@ -1090,7 +1132,7 @@ document.addEventListener('click', e => {
     case 'geo': useLocation(); break;
     case 'exact': nativeExactCheck(true); break;
     case 'fix-perm': enableNotifications(); break;
-    case 'theme': state.settings.theme = el.dataset.v; save(); applyTheme(); renderSheet(); break;
+    case 'theme': state.settings.theme = el.dataset.v; save(); applyTheme(); renderSheet(); pushWidget(); break;
     case 'check-update':
       if (typeof window.__checkUpdate !== 'function') { toast('Güncelleme yalnızca telefon uygulamasında.'); break; }
       toast('Denetleniyor…');
@@ -1278,6 +1320,7 @@ setInterval(() => {
 
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) {
+    consumeWidget();
     renderAll(); renderWidget(); scheduleNotifications(); refreshNativeStatus();
     // Uygulama arka plandan öne gelince de güncelleme denetle (en fazla 10 dk'da bir)
     if (typeof window.__checkUpdate === 'function' && Date.now() - (window.__lastUpdateCheck || 0) > 10 * 60000) {
@@ -1292,6 +1335,7 @@ if (!Native.isNative && 'serviceWorker' in navigator && /^https?:$/.test(locatio
 }
 
 initNativeActions();
+consumeWidget();
 window.__appBooted = true; // yükleyici: kod sorunsuz açıldı
 window.__lastUpdateCheck = Date.now(); // açılışta yükleyici zaten denetliyor
 renderAll();

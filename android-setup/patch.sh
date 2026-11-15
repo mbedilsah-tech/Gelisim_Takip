@@ -17,7 +17,12 @@ JDIR=$APP/src/main/java/com/mbedilsah/gelisimtakip
 mkdir -p "$JDIR"
 cp android-setup/java/*.java "$JDIR/"
 
-# 4) Sürüm numarası: her derlemede artar, telefon güncelleme olarak kurar
+# 4) Ana ekran widget'ı
+RECV='        <receiver android:name=".GelisimWidget" android:exported="false" android:label="Gelişim Takip">\n            <intent-filter>\n                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />\n            </intent-filter>\n            <meta-data android:name="android.appwidget.provider" android:resource="@xml/gelisim_widget_info" />\n        </receiver>\n'
+sed -i "s#</application>#${RECV}    </application>#" "$MAN"
+echo "--- Widget:"; grep -n "GelisimWidget" "$MAN"
+
+# 5) Sürüm numarası: her derlemede artar, telefon güncelleme olarak kurar
 N=${GITHUB_RUN_NUMBER:-1}
 sed -i -E "s/versionCode [0-9]+/versionCode ${N}/; s/versionName \"[^\"]*\"/versionName \"1.0.${N}\"/" $APP/build.gradle
 
